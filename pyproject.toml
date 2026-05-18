@@ -1,0 +1,27 @@
+[project]
+name = "flashcard-generator"
+version = "0.1.0"
+description = "Open-source app for generating flashcards from learning materials."
+readme = "README.md"
+authors = [
+    { name = "Manoel Cortes Mendez", email = "manoelcortesmendez@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+flashcard-generator = "flashcard_generator:main"
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipdb>=0.13.13",
+    "ipython>=9.13.0",
+    "mypy>=2.1.0",
+    "pre-commit>=4.6.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.13",
+]
