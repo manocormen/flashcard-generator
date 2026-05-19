@@ -25,3 +25,9 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.13",
 ]
+
+[tool.mypy]
+strict = true
+
+[tool.ruff.lint]
+select = ["ALL"]
