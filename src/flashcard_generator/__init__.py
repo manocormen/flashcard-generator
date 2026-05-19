@@ -1,2 +1,5 @@
+"""Flashcard Generator Package."""
+
+
 def main() -> None:
-    print("Hello from flashcard-generator!")
+    """Run main logic."""
