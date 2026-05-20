@@ -7,7 +7,9 @@ authors = [
     { name = "Manoel Cortes Mendez", email = "manoelcortesmendez@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "gradio>=6.14.0",
+]
 
 [project.scripts]
 flashcard-generator = "flashcard_generator:main"
