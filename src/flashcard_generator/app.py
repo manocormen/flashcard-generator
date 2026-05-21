@@ -17,18 +17,22 @@ def report_uploads(filepaths: list[str] | None) -> str:
     return f"You uploaded {len(filenames)} files:\n\n{bullets}\n\n{warning}"
 
 
-demo = gr.Interface(
-    fn=report_uploads,
-    inputs=gr.Files(
-        label="Learning materials: .txt .md .markdown .pdf",
-        file_types=[".txt", ".md", ".markdown", ".pdf"],
-    ),
-    outputs="text",
-    title="Flashcard Generator",
-    submit_btn="Generate Flashcards",
-    clear_btn=None,
-    flagging_mode="never",
-)
+def create_app() -> gr.Interface:
+    """Return an app instance."""
+    return gr.Interface(
+        fn=report_uploads,
+        inputs=gr.Files(
+            label="Learning materials: .txt .md .markdown .pdf",
+            file_types=[".txt", ".md", ".markdown", ".pdf"],
+        ),
+        outputs="text",
+        title="Flashcard Generator",
+        submit_btn="Generate Flashcards",
+        clear_btn=None,
+        flagging_mode="never",
+    )
+
 
 if __name__ == "__main__":
-    demo.launch()
+    app = create_app()
+    app.launch()
