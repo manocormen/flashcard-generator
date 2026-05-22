@@ -7,10 +7,12 @@ authors = [
     { name = "Manoel Cortes Mendez", email = "manoelcortesmendez@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "gradio>=6.14.0",
+]
 
 [project.scripts]
-flashcard-generator = "flashcard_generator:main"
+flashcard-generator = "flashcard_generator.app:main"
 
 [build-system]
 requires = ["uv_build>=0.11.14,<0.12.0"]
