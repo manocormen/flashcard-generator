@@ -1,14 +1,13 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.13
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
   - repo: local
     hooks:
-      - id: mypy
-        name: mypy
-        entry: uv run mypy .
-        language: system
+      - id: fix
+        name: fix
+        entry: uv run --locked just fix
+        language: unsupported
+        pass_filenames: false
+      - id: typecheck
+        name: typecheck
+        entry: uv run --locked just typecheck
+        language: unsupported
         pass_filenames: false
