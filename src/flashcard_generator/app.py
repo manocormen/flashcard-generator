@@ -33,9 +33,12 @@ def create_app() -> gr.Interface:
     )
 
 
+demo = create_app()
+
+
 def main() -> None:
     """Launch the app."""
-    create_app().launch()
+    demo.launch()
 
 
 if __name__ == "__main__":

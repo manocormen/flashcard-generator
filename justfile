@@ -8,6 +8,11 @@
 run:
     uv run flashcard-generator
 
+# Run app with auto-reload
+[group("App")]
+dev:
+    uv run gradio src/flashcard_generator/app.py
+
 # Fix formatting
 [group("Mutating QA")]
 format:
