@@ -15,10 +15,12 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     filepaths = [Path(gp) for gp in gradio_paths]
     extraction = extract_docs(filepaths)
 
-    unsupported = "\n".join(f"\t- {p.name}" for p in extraction.unsupported_paths)
     snippets = "\n".join(
         f"\t- {d.path.name}: \t\t{d.text[:30].strip()} ... [{len(d.text)} characters]"
         for d in extraction.docs
+    )
+    rejected = "\n".join(
+        f"\t- {r.path.name} \t\t({r.reason.value})" for r in extraction.rejected_paths
     )
     warning = (
         "Notes:\n\n"
@@ -29,8 +31,8 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     return (
         f"Extracted {len(extraction.docs)} documents:\n\n"
         f"{snippets}\n\n"
-        f"Skipped {len(extraction.unsupported_paths)} unsupported files:\n\n"
-        f"{unsupported}\n\n"
+        f"Skipped {len(extraction.rejected_paths)} files:\n\n"
+        f"{rejected}\n\n"
         f"{warning}"
     )
 
