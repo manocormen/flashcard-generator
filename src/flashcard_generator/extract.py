@@ -16,6 +16,7 @@ class RejectionReason(StrEnum):
 
     UNSUPPORTED_EXTENSION = "unsupported_extension"
     NOT_UTF8_ENCODED = "not_utf8_encoded"
+    READ_FAILED = "read_failed"
 
 
 @dataclass(kw_only=True)
@@ -56,6 +57,9 @@ def extract_docs(paths: Iterable[Path]) -> ExtractionResult:
             docs.append(_extract_doc(path))
         except UnicodeDecodeError:
             rp = RejectedPath(path=path, reason=RejectionReason.NOT_UTF8_ENCODED)
+            rejected_paths.append(rp)
+        except OSError:
+            rp = RejectedPath(path=path, reason=RejectionReason.READ_FAILED)
             rejected_paths.append(rp)
 
     return ExtractionResult(docs=docs, rejected_paths=rejected_paths)

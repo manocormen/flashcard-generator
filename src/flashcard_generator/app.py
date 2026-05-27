@@ -4,7 +4,7 @@ from pathlib import Path
 
 import gradio as gr
 
-from flashcard_generator.extract import extract_docs
+from flashcard_generator.extract import RejectionReason, extract_docs
 
 
 def process_uploads(gradio_paths: list[str] | None) -> str:
@@ -12,15 +12,23 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     if not gradio_paths:
         return "You didn't upload anything."
 
+    # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
     extraction = extract_docs(filepaths)
 
+    # Return temporary status output while the pipeline is incomplete
+    reason2label: dict[RejectionReason, str] = {
+        RejectionReason.UNSUPPORTED_EXTENSION: "Unsupported file type",
+        RejectionReason.NOT_UTF8_ENCODED: "Not UTF-8 encoded",
+        RejectionReason.READ_FAILED: "Could not read file",
+    }
     snippets = "\n".join(
         f"\t- {d.path.name}: \t\t{d.text[:30].strip()} ... [{len(d.text)} characters]"
         for d in extraction.docs
     )
     rejected = "\n".join(
-        f"\t- {r.path.name} \t\t({r.reason.value})" for r in extraction.rejected_paths
+        f"\t- {r.path.name} \t\t{reason2label[r.reason]}"
+        for r in extraction.rejected_paths
     )
     warning = (
         "Notes:\n\n"

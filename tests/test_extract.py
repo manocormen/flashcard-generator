@@ -84,3 +84,15 @@ def test_extract_docs_from_non_utf8_file(tmp_path: Path) -> None:
     assert extraction.rejected_paths == [
         RejectedPath(path=non_utf8_path, reason=RejectionReason.NOT_UTF8_ENCODED),
     ]
+
+
+def test_extract_docs_from_non_existent_file(tmp_path: Path) -> None:
+    """Test trying to extract docs from a non-existing file."""
+    fileless_path = tmp_path / "example.txt"
+
+    extraction = extract_docs([fileless_path])
+
+    assert extraction.docs == []
+    assert extraction.rejected_paths == [
+        RejectedPath(path=fileless_path, reason=RejectionReason.READ_FAILED),
+    ]
