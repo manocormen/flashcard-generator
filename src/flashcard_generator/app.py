@@ -4,23 +4,51 @@ from pathlib import Path
 
 import gradio as gr
 
+from flashcard_generator.extract import RejectionReason, extract_docs
 
-def report_uploads(filepaths: list[str] | None) -> str:
-    """Return a temporary message listing the uploaded files."""
-    if not filepaths:
+
+def process_uploads(gradio_paths: list[str] | None) -> str:
+    """Process the uploaded files."""
+    if not gradio_paths:
         return "You didn't upload anything."
 
-    filenames = [Path(fp).name for fp in filepaths]
-    bullets = "\n".join(f"\t- {fn}" for fn in filenames)
-    warning = "Flashcard generation not implemented yet."
+    # Gradio passes paths to cached upload copies, not raw user-provided paths
+    filepaths = [Path(gp) for gp in gradio_paths]
+    extraction = extract_docs(filepaths)
 
-    return f"You uploaded {len(filenames)} files:\n\n{bullets}\n\n{warning}"
+    # Return temporary status output while the pipeline is incomplete
+    reason2label: dict[RejectionReason, str] = {
+        RejectionReason.UNSUPPORTED_EXTENSION: "Unsupported file type",
+        RejectionReason.NOT_UTF8_ENCODED: "Not UTF-8 encoded",
+        RejectionReason.READ_FAILED: "Could not read file",
+    }
+    snippets = "\n".join(
+        f"\t- {d.path.name}: \t\t{d.text[:30].strip()} ... [{len(d.text)} characters]"
+        for d in extraction.docs
+    )
+    rejected = "\n".join(
+        f"\t- {r.path.name} \t\t{reason2label[r.reason]}"
+        for r in extraction.rejected_paths
+    )
+    warning = (
+        "Notes:\n\n"
+        "\t- PDF support not implemented yet.\n"
+        "\t- Flashcard generation not implemented yet."
+    )
+
+    return (
+        f"Extracted {len(extraction.docs)} documents:\n\n"
+        f"{snippets}\n\n"
+        f"Skipped {len(extraction.rejected_paths)} files:\n\n"
+        f"{rejected}\n\n"
+        f"{warning}"
+    )
 
 
 def create_app() -> gr.Interface:
     """Return an app instance."""
     return gr.Interface(
-        fn=report_uploads,
+        fn=process_uploads,
         inputs=gr.Files(
             label="Learning materials: .txt .md .markdown .pdf",
             file_types=[".txt", ".md", ".markdown", ".pdf"],
@@ -33,9 +61,12 @@ def create_app() -> gr.Interface:
     )
 
 
+demo = create_app()
+
+
 def main() -> None:
     """Launch the app."""
-    create_app().launch()
+    demo.launch()
 
 
 if __name__ == "__main__":
