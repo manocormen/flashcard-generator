@@ -48,29 +48,32 @@ def extract_docs(paths: Iterable[Path]) -> ExtractionResult:
     docs, rejected_paths = [], []
 
     for path in paths:
-        if not _is_extension_supported(path):
-            rp = RejectedPath(path=path, reason=RejectionReason.UNSUPPORTED_EXTENSION)
-            rejected_paths.append(rp)
-            continue
-
-        try:
-            docs.append(_extract_doc(path))
-        except UnicodeDecodeError:
-            rp = RejectedPath(path=path, reason=RejectionReason.NOT_UTF8_ENCODED)
-            rejected_paths.append(rp)
-        except OSError:
-            rp = RejectedPath(path=path, reason=RejectionReason.READ_FAILED)
-            rejected_paths.append(rp)
+        outcome = _extract_doc(path)
+        if isinstance(outcome, Doc):
+            docs.append(outcome)
+        else:
+            rejected_paths.append(outcome)
 
     return ExtractionResult(docs=docs, rejected_paths=rejected_paths)
 
 
-def _extract_doc(path: Path) -> Doc:
-    """Extract document from a supported path."""
-    text = path.read_text(encoding="utf-8")
+def _extract_doc(path: Path) -> Doc | RejectedPath:
+    """Extract document from path."""
+    extension = path.suffix.lower()
+
+    if extension in SUPPORTED_EXTENSIONS:
+        return _extract_doc_from_text(path)
+
+    return RejectedPath(path=path, reason=RejectionReason.UNSUPPORTED_EXTENSION)
+
+
+def _extract_doc_from_text(path: Path) -> Doc | RejectedPath:
+    """Extract document from UTF-8 text file."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return RejectedPath(path=path, reason=RejectionReason.NOT_UTF8_ENCODED)
+    except OSError:
+        return RejectedPath(path=path, reason=RejectionReason.READ_FAILED)
+
     return Doc(path=path, text=text)
-
-
-def _is_extension_supported(path: Path) -> bool:
-    """Return whether the path has a supported extension."""
-    return path.suffix.lower() in SUPPORTED_EXTENSIONS
