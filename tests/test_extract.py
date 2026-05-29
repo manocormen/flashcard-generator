@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+import pymupdf
 import pytest
 
 from flashcard_generator.extract import Doc, RejectedPath, RejectionReason, extract_docs
@@ -27,6 +28,27 @@ def test_extract_docs_from_supported_text_file(tmp_path: Path, extension: str) -
 
     assert extraction.docs == [Doc(path=path, text=PANGRAM)]
     assert extraction.rejected_paths == []
+
+
+@pytest.mark.parametrize("extension", [".pdf", ".PDF"])
+def test_extract_docs_from_text_pdf_file(tmp_path: Path, extension: str) -> None:
+    """Test extracting a doc from a text-based PDF file."""
+    pdf_path = tmp_path / f"example{extension}"
+    text = "Only review what you need, when you need it!"
+
+    pdf = pymupdf.open()  # type: ignore[no-untyped-call]
+    pdf.new_page().insert_text(point=(64, 64), text=text)
+    pdf.save(str(pdf_path))  # type: ignore[no-untyped-call]
+    pdf.close()  # type: ignore[no-untyped-call]
+
+    extraction = extract_docs([pdf_path])
+
+    assert extraction.rejected_paths == []
+    assert len(extraction.docs) == 1
+
+    doc = extraction.docs[0]
+    assert doc.path == pdf_path
+    assert text in doc.text
 
 
 @pytest.mark.parametrize("extension", ["", ".unsupported"])
