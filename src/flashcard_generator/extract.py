@@ -4,11 +4,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+import pymupdf4llm  # type: ignore[import-untyped]
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
 
-SUPPORTED_EXTENSIONS = {".txt", ".md", ".markdown"}
+SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".markdown"}
+PDF_EXTENSION = ".pdf"
 
 
 class RejectionReason(StrEnum):
@@ -61,8 +64,10 @@ def _extract_doc(path: Path) -> Doc | RejectedPath:
     """Extract document from path."""
     extension = path.suffix.lower()
 
-    if extension in SUPPORTED_EXTENSIONS:
+    if extension in SUPPORTED_TEXT_EXTENSIONS:
         return _extract_doc_from_text(path)
+    if extension == PDF_EXTENSION:
+        return _extract_doc_from_pdf(path)
 
     return RejectedPath(path=path, reason=RejectionReason.UNSUPPORTED_EXTENSION)
 
@@ -74,6 +79,16 @@ def _extract_doc_from_text(path: Path) -> Doc | RejectedPath:
     except UnicodeDecodeError:
         return RejectedPath(path=path, reason=RejectionReason.NOT_UTF8_ENCODED)
     except OSError:
+        return RejectedPath(path=path, reason=RejectionReason.READ_FAILED)
+
+    return Doc(path=path, text=text)
+
+
+def _extract_doc_from_pdf(path: Path) -> Doc | RejectedPath:
+    """Extract document from text-based PDF file."""
+    try:
+        text = pymupdf4llm.to_markdown(str(path), use_ocr=False)
+    except OSError, RuntimeError:
         return RejectedPath(path=path, reason=RejectionReason.READ_FAILED)
 
     return Doc(path=path, text=text)
