@@ -36,10 +36,9 @@ def test_extract_docs_from_text_pdf_file(tmp_path: Path, extension: str) -> None
     pdf_path = tmp_path / f"example{extension}"
     text = "Only review what you need, when you need it!"
 
-    pdf = pymupdf.open()  # type: ignore[no-untyped-call]
-    pdf.new_page().insert_text(point=(64, 64), text=text)
-    pdf.save(str(pdf_path))  # type: ignore[no-untyped-call]
-    pdf.close()  # type: ignore[no-untyped-call]
+    with pymupdf.open() as pdf:  # type: ignore[no-untyped-call]
+        pdf.new_page().insert_text(point=(64, 64), text=text)
+        pdf.save(str(pdf_path))
 
     extraction = extract_docs([pdf_path])
 
