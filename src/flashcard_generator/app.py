@@ -23,18 +23,14 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
         RejectionReason.READ_FAILED: "Could not read file",
     }
     snippets = "\n".join(
-        f"\t- {d.path.name}: \t\t{d.text[:30].strip()} ... [{len(d.text)} characters]"
+        f"\t- {d.path.name}: \t\t{d.text[:16].strip()} ... [{len(d.text)} characters]"
         for d in extraction.docs
     )
     rejected = "\n".join(
         f"\t- {r.path.name} \t\t{reason2label[r.reason]}"
         for r in extraction.rejected_paths
     )
-    warning = (
-        "Notes:\n\n"
-        "\t- PDF support not implemented yet.\n"
-        "\t- Flashcard generation not implemented yet."
-    )
+    warning = "Notes:\n\n\t- Flashcard generation not implemented yet."
 
     return (
         f"Extracted {len(extraction.docs)} documents:\n\n"
