@@ -4,6 +4,7 @@ from pathlib import Path
 
 import gradio as gr
 
+from flashcard_generator.clean import clean_docs
 from flashcard_generator.extract import RejectionReason, extract_docs
 
 
@@ -15,6 +16,7 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
     extraction = extract_docs(filepaths)
+    cleaned_docs = clean_docs(extraction.docs)
 
     # Return temporary status output while the pipeline is incomplete
     reason2label: dict[RejectionReason, str] = {
@@ -24,7 +26,7 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     }
     snippets = "\n".join(
         f"\t- {d.path.name}: \t\t{d.text[:16].strip()} ... [{len(d.text)} characters]"
-        for d in extraction.docs
+        for d in cleaned_docs
     )
     rejected = "\n".join(
         f"\t- {r.path.name} \t\t{reason2label[r.reason]}"
@@ -33,9 +35,9 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     warning = "Notes:\n\n\t- Flashcard generation not implemented yet."
 
     return (
-        f"Extracted {len(extraction.docs)} documents:\n\n"
+        f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
         f"{snippets}\n\n"
-        f"Skipped {len(extraction.rejected_paths)} files:\n\n"
+        f"Skipped {len(extraction.rejected_paths)} file(s):\n\n"
         f"{rejected}\n\n"
         f"{warning}"
     )
