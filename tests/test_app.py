@@ -9,4 +9,4 @@ def test_create_app() -> None:
     """Test that create_app() returns a valid Gradio instance."""
     app = create_app()
 
-    assert isinstance(app, gr.Interface)
+    assert type(app) is gr.Blocks

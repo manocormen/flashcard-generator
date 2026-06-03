@@ -7,6 +7,12 @@ import gradio as gr
 from flashcard_generator.clean import clean_docs
 from flashcard_generator.extract import RejectionReason, extract_docs
 
+CSS = """
+#app-title {
+    text-align: center;
+}
+"""
+
 
 def process_uploads(gradio_paths: list[str] | None) -> str:
     """Process the uploaded files."""
@@ -43,20 +49,21 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     )
 
 
-def create_app() -> gr.Interface:
+def create_app() -> gr.Blocks:
     """Return an app instance."""
-    return gr.Interface(
-        fn=process_uploads,
-        inputs=gr.Files(
+    app = gr.Blocks(title="Flashcard Generator")
+    with app:
+        gr.Markdown("# Flashcard Generator", elem_id="app-title")
+        files = gr.Files(
             label="Learning materials: .txt .md .markdown .pdf",
             file_types=[".txt", ".md", ".markdown", ".pdf"],
-        ),
-        outputs="text",
-        title="Flashcard Generator",
-        submit_btn="Generate Flashcards",
-        clear_btn=None,
-        flagging_mode="never",
-    )
+        )
+        button = gr.Button(value="Generate Flashcards", variant="primary")
+        output = gr.Textbox(label="Summary")
+
+        button.click(fn=process_uploads, inputs=files, outputs=output)
+
+    return app
 
 
 demo = create_app()
@@ -64,7 +71,7 @@ demo = create_app()
 
 def main() -> None:
     """Launch the app."""
-    demo.launch()
+    demo.launch(css=CSS)
 
 
 if __name__ == "__main__":
