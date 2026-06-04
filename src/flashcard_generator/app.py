@@ -49,19 +49,36 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     )
 
 
+def show_summary_view() -> tuple[gr.Column, gr.Column]:
+    """Show the app's summary view."""
+    return gr.Column(visible=False), gr.Column(visible=True)
+
+
 def create_app() -> gr.Blocks:
     """Return an app instance."""
     app = gr.Blocks(title="Flashcard Generator")
     with app:
         gr.Markdown("# Flashcard Generator", elem_id="app-title")
-        files = gr.Files(
-            label="Learning materials: .txt .md .markdown .pdf",
-            file_types=[".txt", ".md", ".markdown", ".pdf"],
-        )
-        button = gr.Button(value="Generate Flashcards", variant="primary")
-        output = gr.Textbox(label="Summary")
 
-        button.click(fn=process_uploads, inputs=files, outputs=output)
+        with gr.Column(visible=True) as upload_view:
+            files = gr.Files(
+                label="Learning materials: .txt .md .markdown .pdf",
+                file_types=[".txt", ".md", ".markdown", ".pdf"],
+            )
+            button = gr.Button(value="Generate Flashcards", variant="primary")
+
+        with gr.Column(visible=False) as summary_view:
+            summary = gr.Textbox(label="Summary")
+
+        button.click(
+            fn=show_summary_view,
+            inputs=None,
+            outputs=[upload_view, summary_view],
+        ).then(
+            fn=process_uploads,
+            inputs=files,
+            outputs=summary,
+        )
 
     return app
 
