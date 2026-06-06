@@ -1,11 +1,14 @@
 """Gradio upload UI for the flashcard generator."""
 
+from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
 
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
 from flashcard_generator.extract import RejectionReason, extract_docs
+
+type ViewState = tuple[gr.Column, gr.Column, gr.Column, str]
 
 CSS = """
 #app-title {
@@ -49,9 +52,33 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     )
 
 
-def show_summary_view() -> tuple[gr.Column, gr.Column]:
-    """Show the app's summary view."""
-    return gr.Column(visible=False), gr.Column(visible=True)
+def show_progress_view() -> ViewState:
+    """Show the progress view while the pipeline runs."""
+    return (
+        gr.Column(visible=False),
+        gr.Column(visible=True),
+        gr.skip(),  # Avoids bug: github.com/gradio-app/gradio/issues/13494
+        "",
+    )
+
+
+def show_summary_view(summary: str) -> ViewState:
+    """Show the summary view with the pipeline results."""
+    return (
+        gr.skip(),  # Avoids bug: github.com/gradio-app/gradio/issues/13494
+        gr.Column(visible=False),
+        gr.Column(visible=True),
+        summary,
+    )
+
+
+def run_flow(gradio_paths: list[str] | None) -> Generator[ViewState]:
+    """Run the Gradio flashcard generation flow."""
+    yield show_progress_view()
+
+    summary = process_uploads(gradio_paths)
+
+    yield show_summary_view(summary)
 
 
 def create_app() -> gr.Blocks:
@@ -67,17 +94,16 @@ def create_app() -> gr.Blocks:
             )
             button = gr.Button(value="Generate Flashcards", variant="primary")
 
+        with gr.Column(visible=False) as progress_view:
+            gr.Markdown("Processing...")
+
         with gr.Column(visible=False) as summary_view:
             summary = gr.Textbox(label="Summary")
 
         button.click(
-            fn=show_summary_view,
-            inputs=None,
-            outputs=[upload_view, summary_view],
-        ).then(
-            fn=process_uploads,
+            fn=run_flow,
             inputs=files,
-            outputs=summary,
+            outputs=[upload_view, progress_view, summary_view, summary],
         )
 
     return app
