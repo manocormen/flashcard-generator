@@ -1,14 +1,20 @@
 """Gradio upload UI for the flashcard generator."""
 
+import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
 
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
-from flashcard_generator.extract import RejectionReason, extract_docs
+from flashcard_generator.extract import (
+    Doc,
+    ExtractionResult,
+    RejectionReason,
+    extract_docs,
+)
 
-type ViewState = tuple[gr.Column, gr.Column, gr.Column, str]
+type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str]
 
 CSS = """
 #app-title {
@@ -16,18 +22,25 @@ CSS = """
 }
 """
 
+STEPS = ("Files uploaded", "Text extracted", "Text cleaned")
 
-def process_uploads(gradio_paths: list[str] | None) -> str:
-    """Process the uploaded files."""
-    if not gradio_paths:
-        return "You didn't upload anything."
+STEPS_DELAY = 1  # TEMP: to see the steps cascade in the UI
 
-    # Gradio passes paths to cached upload copies, not raw user-provided paths
-    filepaths = [Path(gp) for gp in gradio_paths]
-    extraction = extract_docs(filepaths)
-    cleaned_docs = clean_docs(extraction.docs)
 
-    # Return temporary status output while the pipeline is incomplete
+def render_progress(steps_completed: int) -> str:
+    """Render pipeline progress as Markdown."""
+    lines = ["### Processing...", ""]
+
+    for index, stage in enumerate(STEPS):
+        checkbox = "[x]" if index < steps_completed else "[ ]"
+
+        lines.append(f"- {checkbox} {stage}")
+
+    return "\n".join(lines)
+
+
+def format_summary(extraction: ExtractionResult, cleaned_docs: list[Doc]) -> str:
+    """Format the temporary pipeline summary."""
     reason2label: dict[RejectionReason, str] = {
         RejectionReason.UNSUPPORTED_EXTENSION: "Unsupported file type",
         RejectionReason.NOT_UTF8_ENCODED: "Not UTF-8 encoded",
@@ -52,32 +65,63 @@ def process_uploads(gradio_paths: list[str] | None) -> str:
     )
 
 
-def show_progress_view() -> ViewState:
-    """Show the progress view while the pipeline runs."""
+def show_progress_view(progress: str) -> ViewState:
+    """Show the progress view when the pipeline starts."""
+    # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
     return (
         gr.Column(visible=False),
         gr.Column(visible=True),
-        gr.skip(),  # Avoids bug: github.com/gradio-app/gradio/issues/13494
-        "",
+        gr.skip(),
+        progress,
+        gr.skip(),
+    )
+
+
+def update_progress_view(progress: str) -> ViewState:
+    """Update the progress view to reflect the current pipeline step."""
+    # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
+    return (
+        gr.skip(),
+        gr.skip(),
+        gr.skip(),
+        progress,
+        gr.skip(),
     )
 
 
 def show_summary_view(summary: str) -> ViewState:
     """Show the summary view with the pipeline results."""
+    # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
     return (
-        gr.skip(),  # Avoids bug: github.com/gradio-app/gradio/issues/13494
+        gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
+        gr.skip(),
         summary,
     )
 
 
 def run_flow(gradio_paths: list[str] | None) -> Generator[ViewState]:
     """Run the Gradio flashcard generation flow."""
-    yield show_progress_view()
+    if not gradio_paths:
+        yield show_summary_view("You didn't upload anything.")
+        return
 
-    summary = process_uploads(gradio_paths)
+    # Gradio passes paths to cached upload copies, not raw user-provided paths
+    filepaths = [Path(gp) for gp in gradio_paths]
 
+    yield show_progress_view(render_progress(steps_completed=1))
+
+    time.sleep(STEPS_DELAY)
+    extraction = extract_docs(filepaths)
+    yield update_progress_view(render_progress(steps_completed=2))
+
+    time.sleep(STEPS_DELAY)
+    cleaned_docs = clean_docs(extraction.docs)
+    yield update_progress_view(render_progress(steps_completed=3))
+
+    time.sleep(STEPS_DELAY)
+    summary = format_summary(extraction, cleaned_docs)
     yield show_summary_view(summary)
 
 
@@ -95,7 +139,7 @@ def create_app() -> gr.Blocks:
             button = gr.Button(value="Generate Flashcards", variant="primary")
 
         with gr.Column(visible=False) as progress_view:
-            gr.Markdown("Processing...")
+            progress_status = gr.Markdown()
 
         with gr.Column(visible=False) as summary_view:
             summary = gr.Textbox(label="Summary")
@@ -103,7 +147,13 @@ def create_app() -> gr.Blocks:
         button.click(
             fn=run_flow,
             inputs=files,
-            outputs=[upload_view, progress_view, summary_view, summary],
+            outputs=[
+                upload_view,
+                progress_view,
+                summary_view,
+                progress_status,
+                summary,
+            ],
         )
 
     return app
