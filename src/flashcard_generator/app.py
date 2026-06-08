@@ -24,7 +24,7 @@ CSS = """
 
 STEPS = ("Files uploaded", "Text extracted", "Text cleaned")
 
-STEPS_DELAY = 1  # TEMP: to see the steps cascade in the UI
+STEPS_DELAY = 1  # To see the steps cascade in the UI
 
 
 def render_progress(steps_completed: int) -> str:
@@ -78,7 +78,7 @@ def show_upload_view() -> ViewState:
 
 def show_progress_view(progress: str) -> ViewState:
     """Show the progress view with a pipeline progress indicator."""
-    # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
+    # gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
     return (
         gr.Column(visible=False),
         gr.Column(visible=True),
