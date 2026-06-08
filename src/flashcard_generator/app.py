@@ -104,19 +104,24 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
 
-    yield show_progress_view(render_progress(steps_completed=1))
+    try:
+        yield show_progress_view(render_progress(steps_completed=1))
 
-    time.sleep(STEPS_DELAY)
-    extraction = extract_docs(filepaths)
-    yield show_progress_view(render_progress(steps_completed=2))
+        time.sleep(STEPS_DELAY)
+        extraction = extract_docs(filepaths)
+        yield show_progress_view(render_progress(steps_completed=2))
 
-    time.sleep(STEPS_DELAY)
-    cleaned_docs = clean_docs(extraction.docs)
-    yield show_progress_view(render_progress(steps_completed=3))
+        time.sleep(STEPS_DELAY)
+        cleaned_docs = clean_docs(extraction.docs)
+        yield show_progress_view(render_progress(steps_completed=3))
 
-    time.sleep(STEPS_DELAY)
-    summary = format_summary(extraction, cleaned_docs)
-    yield show_summary_view(summary)
+        time.sleep(STEPS_DELAY)
+        summary = format_summary(extraction, cleaned_docs)
+        yield show_summary_view(summary)
+
+    except Exception:  # noqa: BLE001
+        gr.Warning("There was an error. Please try again.")
+        yield show_upload_view()
 
 
 def create_app() -> gr.Blocks:
