@@ -24,7 +24,7 @@ CSS = """
 
 STEPS = ("Files uploaded", "Text extracted", "Text cleaned")
 
-STEPS_DELAY = 1  # To see the steps cascade in the UI
+STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
 
 
 def render_progress(steps_completed: int) -> str:
@@ -107,15 +107,15 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
     try:
         yield show_progress_view(render_progress(steps_completed=1))
 
-        time.sleep(STEPS_DELAY)
+        time.sleep(STEPS_DELAY_SECONDS)
         extraction = extract_docs(filepaths)
         yield show_progress_view(render_progress(steps_completed=2))
 
-        time.sleep(STEPS_DELAY)
+        time.sleep(STEPS_DELAY_SECONDS)
         cleaned_docs = clean_docs(extraction.docs)
         yield show_progress_view(render_progress(steps_completed=3))
 
-        time.sleep(STEPS_DELAY)
+        time.sleep(STEPS_DELAY_SECONDS)
         summary = format_summary(extraction, cleaned_docs)
         yield show_summary_view(summary)
 
