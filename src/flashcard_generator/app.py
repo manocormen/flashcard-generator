@@ -65,24 +65,23 @@ def format_summary(extraction: ExtractionResult, cleaned_docs: list[Doc]) -> str
     )
 
 
+def show_upload_view() -> ViewState:
+    """Show the file upload view."""
+    return (
+        gr.Column(visible=True),
+        gr.Column(visible=False),
+        gr.Column(visible=False),
+        "",
+        "",
+    )
+
+
 def show_progress_view(progress: str) -> ViewState:
-    """Show the progress view when the pipeline starts."""
+    """Show the progress view with a pipeline progress indicator."""
     # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
     return (
         gr.Column(visible=False),
         gr.Column(visible=True),
-        gr.skip(),
-        progress,
-        gr.skip(),
-    )
-
-
-def update_progress_view(progress: str) -> ViewState:
-    """Update the progress view to reflect the current pipeline step."""
-    # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
-    return (
-        gr.skip(),
-        gr.skip(),
         gr.skip(),
         progress,
         gr.skip(),
@@ -91,22 +90,17 @@ def update_progress_view(progress: str) -> ViewState:
 
 def show_summary_view(summary: str) -> ViewState:
     """Show the summary view with the pipeline results."""
-    # TEMP: gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
     return (
         gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
-        gr.skip(),
+        "",
         summary,
     )
 
 
-def run_flow(gradio_paths: list[str] | None) -> Generator[ViewState]:
+def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
     """Run the Gradio flashcard generation flow."""
-    if not gradio_paths:
-        yield show_summary_view("You didn't upload anything.")
-        return
-
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
 
@@ -114,11 +108,11 @@ def run_flow(gradio_paths: list[str] | None) -> Generator[ViewState]:
 
     time.sleep(STEPS_DELAY)
     extraction = extract_docs(filepaths)
-    yield update_progress_view(render_progress(steps_completed=2))
+    yield show_progress_view(render_progress(steps_completed=2))
 
     time.sleep(STEPS_DELAY)
     cleaned_docs = clean_docs(extraction.docs)
-    yield update_progress_view(render_progress(steps_completed=3))
+    yield show_progress_view(render_progress(steps_completed=3))
 
     time.sleep(STEPS_DELAY)
     summary = format_summary(extraction, cleaned_docs)
@@ -136,25 +130,31 @@ def create_app() -> gr.Blocks:
                 label="Learning materials: .txt .md .markdown .pdf",
                 file_types=[".txt", ".md", ".markdown", ".pdf"],
             )
-            button = gr.Button(value="Generate Flashcards", variant="primary")
+            generate_button = gr.Button(
+                value="Generate Flashcards",
+                variant="primary",
+                interactive=False,
+            )
 
         with gr.Column(visible=False) as progress_view:
             progress_status = gr.Markdown()
 
         with gr.Column(visible=False) as summary_view:
             summary = gr.Textbox(label="Summary")
+            start_over_button = gr.ClearButton(
+                value="Start Over",
+                components=[files, progress_status, summary],
+            )
 
-        button.click(
-            fn=run_flow,
+        files.change(
+            fn=lambda files: gr.Button(interactive=bool(files)),
             inputs=files,
-            outputs=[
-                upload_view,
-                progress_view,
-                summary_view,
-                progress_status,
-                summary,
-            ],
+            outputs=generate_button,
         )
+
+        outputs = [upload_view, progress_view, summary_view, progress_status, summary]
+        generate_button.click(fn=run_flow, inputs=files, outputs=outputs)
+        start_over_button.click(fn=show_upload_view, outputs=outputs)
 
     return app
 
