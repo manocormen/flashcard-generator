@@ -1,5 +1,6 @@
 """Gradio upload UI for the flashcard generator."""
 
+import logging
 import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
@@ -15,6 +16,8 @@ from flashcard_generator.extract import (
 )
 
 type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str]
+
+LOGGER = logging.getLogger(__name__)
 
 CSS = """
 #app-title {
@@ -119,8 +122,13 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         summary = format_summary(extraction, cleaned_docs)
         yield show_summary_view(summary)
 
-    except Exception:  # noqa: BLE001
-        gr.Warning("There was an error. Please try again.")
+    except Exception as e:
+        LOGGER.exception("There was an unexpected error while running the Gradio flow.")
+        gr.Warning(
+            f"Something went wrong while processing your files.<br>"
+            f"Error: {type(e).__name__}: {e}<br>"
+            f"Please try again.",
+        )
         yield show_upload_view()
 
 
