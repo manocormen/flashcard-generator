@@ -1,8 +1,11 @@
 """Flashcard model for structured outputs."""
 
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, StringConstraints
+
+if TYPE_CHECKING:
+    from pydantic.json_schema import JsonSchemaValue
 
 type NonEmptyStr = Annotated[
     str,
@@ -21,3 +24,13 @@ class GeneratedCards(BaseModel):
     """Collection of generated flashcards."""
 
     cards: list[BasicCard]
+
+
+def generated_cards_json_schema() -> JsonSchemaValue:
+    """Return the JSON card schema for enforcing structured outputs."""
+    return GeneratedCards.model_json_schema()
+
+
+def parse_generated_cards_json(raw_json: str) -> GeneratedCards:
+    """Validate and parse the generated cards against the card model."""
+    return GeneratedCards.model_validate_json(raw_json)
