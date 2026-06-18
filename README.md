@@ -8,6 +8,7 @@ Open-source Python app for generating flashcards from learning materials using o
 
 1. Clone the project.
 2. Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/).
+3. Install [`ollama`](https://ollama.com/download) and run `ollama pull gemma4`.
 
 Optional but recommended, for shorter commands, install [`just`](https://github.com/casey/just):
 
