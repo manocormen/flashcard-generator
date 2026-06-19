@@ -86,6 +86,7 @@ def format_summary(
     rendered_cards = "\n\n".join(
         [f"Card {i}:\n{c.front}\n{c.back}" for i, c in enumerate(cards.cards, start=1)],
     )
+    rendered_cards = rendered_cards or "(No cards generated)"
 
     return (
         f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
