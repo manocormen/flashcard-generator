@@ -5,6 +5,7 @@ import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
 from textwrap import indent
+from typing import TYPE_CHECKING
 
 import gradio as gr
 
@@ -15,7 +16,11 @@ from flashcard_generator.extract import (
     RejectionReason,
     extract_docs,
 )
+from flashcard_generator.generate import generate_cards
 from flashcard_generator.prompt import Prompt, build_prompt
+
+if TYPE_CHECKING:
+    from flashcard_generator.card import GeneratedCards
 
 type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str]
 
@@ -27,7 +32,13 @@ CSS = """
 }
 """
 
-STEPS = ("Files uploaded", "Text extracted", "Text cleaned", "Prompt built")
+STEPS = (
+    "Files uploaded",
+    "Text extracted",
+    "Text cleaned",
+    "Prompt built",
+    "Cards generated",
+)
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
 
@@ -48,6 +59,7 @@ def format_summary(
     extraction: ExtractionResult,
     cleaned_docs: list[Doc],
     prompt: Prompt,
+    cards: GeneratedCards,
 ) -> str:
     """Format the temporary pipeline summary."""
     reason2label: dict[RejectionReason, str] = {
@@ -71,7 +83,10 @@ def format_summary(
             f"{indent(prompt.system[:158], '\t')}...\n"
             f"\t{'-' * 40}   END OF PROMPT SNIPPET   {'-' * 40}"
         )
-    warning = "Notes:\n\n\t- Flashcard generation not implemented yet."
+    rendered_cards = "\n\n".join(
+        [f"Card {i}:\n{c.front}\n{c.back}" for i, c in enumerate(cards.cards, start=1)],
+    )
+    rendered_cards = rendered_cards or "(No cards generated)"
 
     return (
         f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
@@ -79,7 +94,7 @@ def format_summary(
         f"Skipped {len(extraction.rejected_paths)} file(s):\n\n"
         f"{rejected}\n\n"
         f"{prompt_snippet}\n\n"
-        f"{warning}"
+        f"Generated cards:\n\n{rendered_cards}"
     )
 
 
@@ -138,7 +153,11 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         yield show_progress_view(render_progress(steps_completed=4))
 
         time.sleep(STEPS_DELAY_SECONDS)
-        summary = format_summary(extraction, cleaned_docs, prompt)
+        cards = generate_cards(prompt)
+        yield show_progress_view(render_progress(steps_completed=5))
+
+        time.sleep(STEPS_DELAY_SECONDS)
+        summary = format_summary(extraction, cleaned_docs, prompt, cards)
         yield show_summary_view(summary)
 
     except Exception as e:
