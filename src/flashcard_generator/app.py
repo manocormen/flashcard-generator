@@ -1,6 +1,7 @@
 """Gradio upload UI for the flashcard generator."""
 
 import logging
+import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
+from flashcard_generator.export import export_cards
 from flashcard_generator.extract import (
     Doc,
     ExtractionResult,
@@ -21,6 +23,7 @@ from flashcard_generator.prompt import Prompt, build_prompt
 
 if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
+    from flashcard_generator.export import ExportedCards
 
 type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str]
 
@@ -38,6 +41,7 @@ STEPS = (
     "Text cleaned",
     "Prompt built",
     "Cards generated",
+    "Downloads ready",
 )
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
@@ -60,6 +64,7 @@ def format_summary(
     cleaned_docs: list[Doc],
     prompt: Prompt,
     cards: GeneratedCards,
+    export: ExportedCards,
 ) -> str:
     """Format the temporary pipeline summary."""
     reason2label: dict[RejectionReason, str] = {
@@ -88,13 +93,16 @@ def format_summary(
     )
     rendered_cards = rendered_cards or "(No cards generated)"
 
+    export_paths = "\n".join([str(export.json_path), str(export.csv_path)])
+
     return (
         f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
         f"{snippets}\n\n"
         f"Skipped {len(extraction.rejected_paths)} file(s):\n\n"
         f"{rejected}\n\n"
         f"{prompt_snippet}\n\n"
-        f"Generated cards:\n\n{rendered_cards}"
+        f"Generated cards:\n\n{rendered_cards}\n\n"
+        f"Card files:\n\n{export_paths}"
     )
 
 
@@ -157,7 +165,12 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         yield show_progress_view(render_progress(steps_completed=5))
 
         time.sleep(STEPS_DELAY_SECONDS)
-        summary = format_summary(extraction, cleaned_docs, prompt, cards)
+        output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
+        export = export_cards(cards, output_dir)
+        yield show_progress_view(render_progress(steps_completed=6))
+
+        time.sleep(STEPS_DELAY_SECONDS)
+        summary = format_summary(extraction, cleaned_docs, prompt, cards, export)
         yield show_summary_view(summary)
 
     except Exception as e:
