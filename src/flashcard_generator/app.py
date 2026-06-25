@@ -246,8 +246,9 @@ def create_app() -> gr.Blocks:
                     container=False,
                     interactive=True,
                 )
-                gr.DownloadButton(
+                download_button = gr.DownloadButton(
                     variant="primary",
+                    label="Download JSON",
                     value=get_filepath,
                     inputs=[format_dropdown, export],
                 )
@@ -261,6 +262,12 @@ def create_app() -> gr.Blocks:
             fn=lambda files: gr.Button(interactive=bool(files)),
             inputs=files,
             outputs=generate_button,
+        )
+
+        format_dropdown.change(
+            fn=lambda format_: gr.update(label=f"Download {format_}"),
+            inputs=format_dropdown,
+            outputs=download_button,
         )
 
         outputs = [
