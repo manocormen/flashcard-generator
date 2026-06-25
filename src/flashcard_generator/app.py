@@ -1,6 +1,7 @@
 """Gradio upload UI for the flashcard generator."""
 
 import logging
+import shutil
 import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
@@ -113,7 +114,7 @@ def show_upload_view() -> ViewState:
         gr.Column(visible=False),
         "",
         "",
-        gr.skip(),
+        None,
     )
 
 
@@ -199,6 +200,20 @@ def get_filepath(format_: str, export: ExportedCards | None) -> Path | None:
             return None
 
 
+def cleanup_export(export: ExportedCards | None) -> None:
+    """Delete the exported card files."""
+    if export is None:
+        return
+
+    shutil.rmtree(export.json_path.parent)
+
+
+def reset_app_state(export: ExportedCards | None) -> ViewState:
+    """Delete exported files and return to the upload view."""
+    cleanup_export(export)
+    return show_upload_view()
+
+
 def create_app() -> gr.Blocks:
     """Return an app instance."""
     app = gr.Blocks(title="Flashcard Generator")
@@ -220,7 +235,7 @@ def create_app() -> gr.Blocks:
             progress_status = gr.Markdown()
 
         with gr.Column(visible=False) as summary_view:
-            export = gr.State()
+            export = gr.State(delete_callback=cleanup_export)
 
             summary = gr.Textbox(label="Summary")
 
@@ -257,7 +272,12 @@ def create_app() -> gr.Blocks:
             export,
         ]
         generate_button.click(fn=run_flow, inputs=files, outputs=outputs)
-        start_over_button.click(fn=show_upload_view, outputs=outputs)
+
+        start_over_button.click(
+            fn=reset_app_state,
+            inputs=export,
+            outputs=outputs,
+        )
 
     return app
 
