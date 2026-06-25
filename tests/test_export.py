@@ -59,3 +59,41 @@ def test_export_cards_csv_content(
         ["front1", "back1"],
         ["front2", "back2"],
     ]
+
+
+def test_export_cards_csv_special_chars(tmp_path: Path) -> None:
+    """Test that special characters are correctly exported as CSV."""
+    generated_cards = GeneratedCards(
+        cards=[
+            BasicCard(front="hello, there", back="hello, there"),
+            BasicCard(front='hello "there"', back='hello "there"'),
+            BasicCard(front="hello\nthere", back="hello\nthere"),
+        ],
+    )
+
+    exported_cards = export_cards(generated_cards, tmp_path)
+
+    with exported_cards.csv_path.open(encoding="utf-8", newline="") as f:
+        csv_cards = list(csv.reader(f))
+
+    assert csv_cards == [
+        ["front", "back"],
+        ["hello, there", "hello, there"],
+        ['hello "there"', 'hello "there"'],
+        ["hello\nthere", "hello\nthere"],
+    ]
+
+
+def test_export_empty_cards_list(tmp_path: Path) -> None:
+    """Test that no cards still produces valid export files."""
+    generated_cards = GeneratedCards(cards=[])
+
+    exported_cards = export_cards(generated_cards, tmp_path)
+
+    json_cards = json.loads(exported_cards.json_path.read_text(encoding="utf-8"))
+
+    with exported_cards.csv_path.open(encoding="utf-8", newline="") as f:
+        csv_cards = list(csv.reader(f))
+
+    assert json_cards["cards"] == []
+    assert csv_cards == [["front", "back"]]
