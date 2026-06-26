@@ -1,6 +1,7 @@
 """Gradio upload UI for the flashcard generator."""
 
 import logging
+import os
 import shutil
 import tempfile
 import time
@@ -27,7 +28,8 @@ if TYPE_CHECKING:
 
 type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str, ExportedCards | None]
 
-LOGGER = logging.getLogger(__name__)
+# Explicit name needed because just dev runs this file as __main__
+LOGGER = logging.getLogger("flashcard_generator.app")
 
 CSS = """
 #app-title {
@@ -292,8 +294,16 @@ def create_app() -> gr.Blocks:
 demo = create_app()
 
 
+def configure_logging() -> None:
+    """Configure logging from the environment."""
+    logging.basicConfig()
+    logging_level = os.getenv("FLASHCARD_GENERATOR_LOG_LEVEL", logging.WARNING)
+    logging.getLogger("flashcard_generator").setLevel(logging_level)
+
+
 def main() -> None:
     """Launch the app."""
+    configure_logging()
     demo.launch(css=CSS)
 
 
