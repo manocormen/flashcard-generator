@@ -1,6 +1,8 @@
 """Gradio upload UI for the flashcard generator."""
 
 import logging
+import shutil
+import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import TYPE_CHECKING
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
+from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import (
     Doc,
     ExtractionResult,
@@ -22,7 +25,7 @@ from flashcard_generator.prompt import Prompt, build_prompt
 if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
 
-type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str]
+type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str, ExportedCards | None]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ STEPS = (
     "Text cleaned",
     "Prompt built",
     "Cards generated",
+    "Downloads ready",
 )
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
@@ -60,6 +64,7 @@ def format_summary(
     cleaned_docs: list[Doc],
     prompt: Prompt,
     cards: GeneratedCards,
+    export: ExportedCards,
 ) -> str:
     """Format the temporary pipeline summary."""
     reason2label: dict[RejectionReason, str] = {
@@ -88,13 +93,16 @@ def format_summary(
     )
     rendered_cards = rendered_cards or "(No cards generated)"
 
+    export_paths = "\n".join([str(export.json_path), str(export.csv_path)])
+
     return (
         f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
         f"{snippets}\n\n"
         f"Skipped {len(extraction.rejected_paths)} file(s):\n\n"
         f"{rejected}\n\n"
         f"{prompt_snippet}\n\n"
-        f"Generated cards:\n\n{rendered_cards}"
+        f"Generated cards:\n\n{rendered_cards}\n\n"
+        f"Card files:\n\n{export_paths}"
     )
 
 
@@ -106,6 +114,7 @@ def show_upload_view() -> ViewState:
         gr.Column(visible=False),
         "",
         "",
+        None,
     )
 
 
@@ -118,10 +127,11 @@ def show_progress_view(progress: str) -> ViewState:
         gr.skip(),
         progress,
         gr.skip(),
+        gr.skip(),
     )
 
 
-def show_summary_view(summary: str) -> ViewState:
+def show_summary_view(summary: str, export: ExportedCards) -> ViewState:
     """Show the summary view with the pipeline results."""
     return (
         gr.Column(visible=False),
@@ -129,6 +139,7 @@ def show_summary_view(summary: str) -> ViewState:
         gr.Column(visible=True),
         "",
         summary,
+        export,
     )
 
 
@@ -157,8 +168,13 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         yield show_progress_view(render_progress(steps_completed=5))
 
         time.sleep(STEPS_DELAY_SECONDS)
-        summary = format_summary(extraction, cleaned_docs, prompt, cards)
-        yield show_summary_view(summary)
+        output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
+        export = export_cards(cards, output_dir)
+        yield show_progress_view(render_progress(steps_completed=6))
+
+        time.sleep(STEPS_DELAY_SECONDS)
+        summary = format_summary(extraction, cleaned_docs, prompt, cards, export)
+        yield show_summary_view(summary, export)
 
     except Exception as e:
         LOGGER.exception("There was an unexpected error while running the Gradio flow.")
@@ -168,6 +184,34 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
             f"Please try again.",
         )
         yield show_upload_view()
+
+
+def get_filepath(format_: str, export: ExportedCards | None) -> Path | None:
+    """Return the filepath for the chosen format."""
+    if export is None:
+        return None
+
+    match format_:
+        case "CSV":
+            return export.csv_path
+        case "JSON":
+            return export.json_path
+        case _:
+            return None
+
+
+def cleanup_export(export: ExportedCards | None) -> None:
+    """Delete the exported card files."""
+    if export is None:
+        return
+
+    shutil.rmtree(export.json_path.parent)
+
+
+def reset_app_state(export: ExportedCards | None) -> ViewState:
+    """Delete exported files and return to the upload view."""
+    cleanup_export(export)
+    return show_upload_view()
 
 
 def create_app() -> gr.Blocks:
@@ -191,7 +235,24 @@ def create_app() -> gr.Blocks:
             progress_status = gr.Markdown()
 
         with gr.Column(visible=False) as summary_view:
+            export = gr.State(delete_callback=cleanup_export)
+
             summary = gr.Textbox(label="Summary")
+
+            with gr.Group(), gr.Row():
+                format_dropdown = gr.Dropdown(
+                    choices=["JSON", "CSV"],
+                    value="JSON",
+                    container=False,
+                    interactive=True,
+                )
+                download_button = gr.DownloadButton(
+                    variant="primary",
+                    label="Download JSON",
+                    value=get_filepath,
+                    inputs=[format_dropdown, export],
+                )
+
             start_over_button = gr.ClearButton(
                 value="Start Over",
                 components=[files, progress_status, summary],
@@ -203,9 +264,27 @@ def create_app() -> gr.Blocks:
             outputs=generate_button,
         )
 
-        outputs = [upload_view, progress_view, summary_view, progress_status, summary]
+        format_dropdown.change(
+            fn=lambda format_: gr.update(label=f"Download {format_}"),
+            inputs=format_dropdown,
+            outputs=download_button,
+        )
+
+        outputs = [
+            upload_view,
+            progress_view,
+            summary_view,
+            progress_status,
+            summary,
+            export,
+        ]
         generate_button.click(fn=run_flow, inputs=files, outputs=outputs)
-        start_over_button.click(fn=show_upload_view, outputs=outputs)
+
+        start_over_button.click(
+            fn=reset_app_state,
+            inputs=export,
+            outputs=outputs,
+        )
 
     return app
 
