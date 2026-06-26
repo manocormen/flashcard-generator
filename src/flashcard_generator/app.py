@@ -7,6 +7,7 @@ import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
+from pprint import pformat
 from textwrap import indent
 from typing import TYPE_CHECKING
 
@@ -155,23 +156,37 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
 
         time.sleep(STEPS_DELAY_SECONDS)
         extraction = extract_docs(filepaths)
+        LOGGER.info(
+            "Extracted %s document(s); skipped %s file(s).",
+            len(extraction.docs),
+            len(extraction.rejected_paths),
+        )
+        LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
         yield show_progress_view(render_progress(steps_completed=2))
 
         time.sleep(STEPS_DELAY_SECONDS)
         cleaned_docs = clean_docs(extraction.docs)
+        LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
+        LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
         yield show_progress_view(render_progress(steps_completed=3))
 
         time.sleep(STEPS_DELAY_SECONDS)
         prompt = build_prompt(cleaned_docs)
+        LOGGER.info("Prompt built.")
+        LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
         yield show_progress_view(render_progress(steps_completed=4))
 
         time.sleep(STEPS_DELAY_SECONDS)
         cards = generate_cards(prompt)
+        LOGGER.info("Generated %s card(s).", len(cards.cards))
+        LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
         yield show_progress_view(render_progress(steps_completed=5))
 
         time.sleep(STEPS_DELAY_SECONDS)
         output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
         export = export_cards(cards, output_dir)
+        LOGGER.info("Exported card file(s): %s.", output_dir)
+        LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
         yield show_progress_view(render_progress(steps_completed=6))
 
         time.sleep(STEPS_DELAY_SECONDS)
