@@ -8,21 +8,15 @@ import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
 from pprint import pformat
-from textwrap import indent
 from typing import TYPE_CHECKING
 
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
 from flashcard_generator.export import ExportedCards, export_cards
-from flashcard_generator.extract import (
-    Doc,
-    ExtractionResult,
-    RejectionReason,
-    extract_docs,
-)
+from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import generate_cards
-from flashcard_generator.prompt import Prompt, build_prompt
+from flashcard_generator.prompt import build_prompt
 
 if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
@@ -62,53 +56,6 @@ def render_progress(steps_completed: int) -> str:
     return "\n".join(lines)
 
 
-def format_summary(
-    extraction: ExtractionResult,
-    cleaned_docs: list[Doc],
-    prompt: Prompt,
-    cards: GeneratedCards,
-    export: ExportedCards,
-) -> str:
-    """Format the temporary pipeline summary."""
-    reason2label: dict[RejectionReason, str] = {
-        RejectionReason.UNSUPPORTED_EXTENSION: "Unsupported file type",
-        RejectionReason.NOT_UTF8_ENCODED: "Not UTF-8 encoded",
-        RejectionReason.READ_FAILED: "Could not read file",
-    }
-    snippets = "\n".join(
-        f"\t- {d.path.name}: \t\t{d.text[:16].strip()} ... [{len(d.text)} characters]"
-        for d in cleaned_docs
-    )
-    rejected = "\n".join(
-        f"\t- {r.path.name} \t\t{reason2label[r.reason]}"
-        for r in extraction.rejected_paths
-    )
-    prompt_snippet = ""
-    if cleaned_docs:
-        prompt_snippet = (
-            f"Built prompt:\n\n"
-            f"\t{'-' * 40} START OF PROMPT SNIPPET {'-' * 40}\n"
-            f"{indent(prompt.system[:158], '\t')}...\n"
-            f"\t{'-' * 40}   END OF PROMPT SNIPPET   {'-' * 40}"
-        )
-    rendered_cards = "\n\n".join(
-        [f"Card {i}:\n{c.front}\n{c.back}" for i, c in enumerate(cards.cards, start=1)],
-    )
-    rendered_cards = rendered_cards or "(No cards generated)"
-
-    export_paths = "\n".join([str(export.json_path), str(export.csv_path)])
-
-    return (
-        f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
-        f"{snippets}\n\n"
-        f"Skipped {len(extraction.rejected_paths)} file(s):\n\n"
-        f"{rejected}\n\n"
-        f"{prompt_snippet}\n\n"
-        f"Generated cards:\n\n{rendered_cards}\n\n"
-        f"Card files:\n\n{export_paths}"
-    )
-
-
 def show_upload_view() -> ViewState:
     """Show the file upload view."""
     return (
@@ -134,14 +81,14 @@ def show_progress_view(progress: str) -> ViewState:
     )
 
 
-def show_summary_view(summary: str, export: ExportedCards) -> ViewState:
-    """Show the summary view with the pipeline results."""
+def show_results_view(rendered_cards: str, export: ExportedCards) -> ViewState:
+    """Show the rendered cards and export options."""
     return (
         gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
         "",
-        summary,
+        rendered_cards,
         export,
     )
 
@@ -190,8 +137,8 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         yield show_progress_view(render_progress(steps_completed=6))
 
         time.sleep(STEPS_DELAY_SECONDS)
-        summary = format_summary(extraction, cleaned_docs, prompt, cards, export)
-        yield show_summary_view(summary, export)
+        rendered_cards = render_cards(cards)
+        yield show_results_view(rendered_cards, export)
 
     except Exception as e:
         LOGGER.exception("There was an unexpected error while running the Gradio flow.")
@@ -201,6 +148,26 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
             f"Please try again.",
         )
         yield show_upload_view()
+
+
+def render_cards(cards: GeneratedCards) -> str:
+    """Return the generated cards cleanly formatted in Markdown."""
+    if not cards.cards:
+        return "No cards generated."
+
+    rendered_cards = []
+
+    for index, card in enumerate(cards.cards, start=1):
+        rendered_card = "\n\n".join(
+            [
+                f"### Card {index}",
+                card.front,
+                card.back,
+            ],
+        )
+        rendered_cards.append(rendered_card)
+
+    return "\n\n---\n\n".join(rendered_cards)
 
 
 def get_filepath(format_: str, export: ExportedCards | None) -> Path | None:
@@ -251,10 +218,10 @@ def create_app() -> gr.Blocks:
         with gr.Column(visible=False) as progress_view:
             progress_status = gr.Markdown()
 
-        with gr.Column(visible=False) as summary_view:
+        with gr.Column(visible=False) as results_view:
             export = gr.State(delete_callback=cleanup_export)
 
-            summary = gr.Textbox(label="Summary")
+            rendered_cards = gr.Markdown(container=True, max_height="60vh")
 
             with gr.Group(), gr.Row():
                 format_dropdown = gr.Dropdown(
@@ -272,7 +239,7 @@ def create_app() -> gr.Blocks:
 
             start_over_button = gr.ClearButton(
                 value="Start Over",
-                components=[files, progress_status, summary],
+                components=[files, progress_status, rendered_cards],
             )
 
         files.change(
@@ -290,9 +257,9 @@ def create_app() -> gr.Blocks:
         outputs = [
             upload_view,
             progress_view,
-            summary_view,
+            results_view,
             progress_status,
-            summary,
+            rendered_cards,
             export,
         ]
         generate_button.click(fn=run_flow, inputs=files, outputs=outputs)
