@@ -11,7 +11,7 @@ run:
 # Run app with auto-reload
 [group("App")]
 dev:
-    uv run gradio src/flashcard_generator/app.py
+    FLASHCARD_GENERATOR_LOG_LEVEL="DEBUG" uv run gradio src/flashcard_generator/app.py
 
 # Fix formatting
 [group("Mutating QA")]

@@ -1,33 +1,30 @@
 """Gradio upload UI for the flashcard generator."""
 
 import logging
+import os
 import shutil
 import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
-from textwrap import indent
+from pprint import pformat
 from typing import TYPE_CHECKING
 
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
 from flashcard_generator.export import ExportedCards, export_cards
-from flashcard_generator.extract import (
-    Doc,
-    ExtractionResult,
-    RejectionReason,
-    extract_docs,
-)
+from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import generate_cards
-from flashcard_generator.prompt import Prompt, build_prompt
+from flashcard_generator.prompt import build_prompt
 
 if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
 
 type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str, ExportedCards | None]
 
-LOGGER = logging.getLogger(__name__)
+# Explicit name needed because just dev runs this file as __main__
+LOGGER = logging.getLogger("flashcard_generator.app")
 
 CSS = """
 #app-title {
@@ -59,53 +56,6 @@ def render_progress(steps_completed: int) -> str:
     return "\n".join(lines)
 
 
-def format_summary(
-    extraction: ExtractionResult,
-    cleaned_docs: list[Doc],
-    prompt: Prompt,
-    cards: GeneratedCards,
-    export: ExportedCards,
-) -> str:
-    """Format the temporary pipeline summary."""
-    reason2label: dict[RejectionReason, str] = {
-        RejectionReason.UNSUPPORTED_EXTENSION: "Unsupported file type",
-        RejectionReason.NOT_UTF8_ENCODED: "Not UTF-8 encoded",
-        RejectionReason.READ_FAILED: "Could not read file",
-    }
-    snippets = "\n".join(
-        f"\t- {d.path.name}: \t\t{d.text[:16].strip()} ... [{len(d.text)} characters]"
-        for d in cleaned_docs
-    )
-    rejected = "\n".join(
-        f"\t- {r.path.name} \t\t{reason2label[r.reason]}"
-        for r in extraction.rejected_paths
-    )
-    prompt_snippet = ""
-    if cleaned_docs:
-        prompt_snippet = (
-            f"Built prompt:\n\n"
-            f"\t{'-' * 40} START OF PROMPT SNIPPET {'-' * 40}\n"
-            f"{indent(prompt.system[:158], '\t')}...\n"
-            f"\t{'-' * 40}   END OF PROMPT SNIPPET   {'-' * 40}"
-        )
-    rendered_cards = "\n\n".join(
-        [f"Card {i}:\n{c.front}\n{c.back}" for i, c in enumerate(cards.cards, start=1)],
-    )
-    rendered_cards = rendered_cards or "(No cards generated)"
-
-    export_paths = "\n".join([str(export.json_path), str(export.csv_path)])
-
-    return (
-        f"Extracted and cleaned {len(cleaned_docs)} document(s):\n\n"
-        f"{snippets}\n\n"
-        f"Skipped {len(extraction.rejected_paths)} file(s):\n\n"
-        f"{rejected}\n\n"
-        f"{prompt_snippet}\n\n"
-        f"Generated cards:\n\n{rendered_cards}\n\n"
-        f"Card files:\n\n{export_paths}"
-    )
-
-
 def show_upload_view() -> ViewState:
     """Show the file upload view."""
     return (
@@ -131,14 +81,14 @@ def show_progress_view(progress: str) -> ViewState:
     )
 
 
-def show_summary_view(summary: str, export: ExportedCards) -> ViewState:
-    """Show the summary view with the pipeline results."""
+def show_results_view(rendered_cards: str | None, export: ExportedCards) -> ViewState:
+    """Show the rendered cards and export options."""
     return (
         gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
         "",
-        summary,
+        rendered_cards if rendered_cards is not None else "No cards generated.",
         export,
     )
 
@@ -153,28 +103,42 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
 
         time.sleep(STEPS_DELAY_SECONDS)
         extraction = extract_docs(filepaths)
+        LOGGER.info(
+            "Extracted %s document(s); skipped %s file(s).",
+            len(extraction.docs),
+            len(extraction.rejected_paths),
+        )
+        LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
         yield show_progress_view(render_progress(steps_completed=2))
 
         time.sleep(STEPS_DELAY_SECONDS)
         cleaned_docs = clean_docs(extraction.docs)
+        LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
+        LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
         yield show_progress_view(render_progress(steps_completed=3))
 
         time.sleep(STEPS_DELAY_SECONDS)
         prompt = build_prompt(cleaned_docs)
+        LOGGER.info("Prompt built.")
+        LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
         yield show_progress_view(render_progress(steps_completed=4))
 
         time.sleep(STEPS_DELAY_SECONDS)
         cards = generate_cards(prompt)
+        LOGGER.info("Generated %s card(s).", len(cards.cards))
+        LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
         yield show_progress_view(render_progress(steps_completed=5))
 
         time.sleep(STEPS_DELAY_SECONDS)
         output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
         export = export_cards(cards, output_dir)
+        LOGGER.info("Exported card file(s): %s.", output_dir)
+        LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
         yield show_progress_view(render_progress(steps_completed=6))
 
         time.sleep(STEPS_DELAY_SECONDS)
-        summary = format_summary(extraction, cleaned_docs, prompt, cards, export)
-        yield show_summary_view(summary, export)
+        rendered_cards = render_cards(cards)
+        yield show_results_view(rendered_cards, export)
 
     except Exception as e:
         LOGGER.exception("There was an unexpected error while running the Gradio flow.")
@@ -184,6 +148,26 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
             f"Please try again.",
         )
         yield show_upload_view()
+
+
+def render_cards(cards: GeneratedCards) -> str | None:
+    """Return the generated cards cleanly formatted in Markdown."""
+    if not cards.cards:
+        return None
+
+    rendered_cards = []
+
+    for index, card in enumerate(cards.cards, start=1):
+        rendered_card = "\n\n".join(
+            [
+                f"### Card {index}",
+                card.front,
+                card.back,
+            ],
+        )
+        rendered_cards.append(rendered_card)
+
+    return "\n\n---\n\n".join(rendered_cards)
 
 
 def get_filepath(format_: str, export: ExportedCards | None) -> Path | None:
@@ -234,10 +218,10 @@ def create_app() -> gr.Blocks:
         with gr.Column(visible=False) as progress_view:
             progress_status = gr.Markdown()
 
-        with gr.Column(visible=False) as summary_view:
+        with gr.Column(visible=False) as results_view:
             export = gr.State(delete_callback=cleanup_export)
 
-            summary = gr.Textbox(label="Summary")
+            rendered_cards = gr.Markdown(container=True, max_height="60vh")
 
             with gr.Group(), gr.Row():
                 format_dropdown = gr.Dropdown(
@@ -255,7 +239,7 @@ def create_app() -> gr.Blocks:
 
             start_over_button = gr.ClearButton(
                 value="Start Over",
-                components=[files, progress_status, summary],
+                components=[files, progress_status, rendered_cards],
             )
 
         files.change(
@@ -273,9 +257,9 @@ def create_app() -> gr.Blocks:
         outputs = [
             upload_view,
             progress_view,
-            summary_view,
+            results_view,
             progress_status,
-            summary,
+            rendered_cards,
             export,
         ]
         generate_button.click(fn=run_flow, inputs=files, outputs=outputs)
@@ -292,8 +276,16 @@ def create_app() -> gr.Blocks:
 demo = create_app()
 
 
+def configure_logging() -> None:
+    """Configure logging from the environment."""
+    logging.basicConfig()
+    logging_level = os.getenv("FLASHCARD_GENERATOR_LOG_LEVEL", logging.WARNING)
+    logging.getLogger("flashcard_generator").setLevel(logging_level)
+
+
 def main() -> None:
     """Launch the app."""
+    configure_logging()
     demo.launch(css=CSS)
 
 
