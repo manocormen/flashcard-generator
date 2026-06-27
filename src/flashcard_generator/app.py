@@ -81,14 +81,14 @@ def show_progress_view(progress: str) -> ViewState:
     )
 
 
-def show_results_view(rendered_cards: str, export: ExportedCards) -> ViewState:
+def show_results_view(rendered_cards: str | None, export: ExportedCards) -> ViewState:
     """Show the rendered cards and export options."""
     return (
         gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
         "",
-        rendered_cards,
+        rendered_cards if rendered_cards is not None else "No cards generated.",
         export,
     )
 
@@ -150,10 +150,10 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         yield show_upload_view()
 
 
-def render_cards(cards: GeneratedCards) -> str:
+def render_cards(cards: GeneratedCards) -> str | None:
     """Return the generated cards cleanly formatted in Markdown."""
     if not cards.cards:
-        return "No cards generated."
+        return None
 
     rendered_cards = []
 
