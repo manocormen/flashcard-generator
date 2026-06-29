@@ -1,13 +1,10 @@
 """Tests for the Gradio app."""
 
-from typing import TYPE_CHECKING
-
 import gradio as gr
+import pytest
 
 from flashcard_generator import app as app_module
-
-if TYPE_CHECKING:
-    import pytest
+from flashcard_generator.generate import DEFAULT_MODEL
 
 
 def test_create_app() -> None:
@@ -39,3 +36,27 @@ def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(warnings) == 1
     assert "RuntimeError" in warnings[0]
     assert message in warnings[0]
+
+
+@pytest.mark.parametrize(
+    ("model_names", "expected_value"),
+    [
+        (["model1", DEFAULT_MODEL], DEFAULT_MODEL),
+        (["model1", "model2"], "model1"),
+    ],
+)
+def test_update_model_choices(
+    monkeypatch: pytest.MonkeyPatch,
+    model_names: list[str],
+    expected_value: str,
+) -> None:
+    """Test that the right model is selected among the choices."""
+
+    def fake_list_model_names() -> list[str]:
+        return model_names
+
+    monkeypatch.setattr(app_module, "list_model_names", fake_list_model_names)
+
+    update = app_module.update_model_choices()
+
+    assert update["value"] == expected_value
