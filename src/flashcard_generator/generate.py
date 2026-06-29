@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
     from flashcard_generator.prompt import Prompt
 
-DEFAULT_MODEL: str = "gemma4"  # Sane general-purpose default, to get started
+DEFAULT_MODEL: str = "gemma4:latest"  # Sane general-purpose default, to get started
 
 
 def generate_cards(prompt: Prompt, model: str = DEFAULT_MODEL) -> GeneratedCards:
@@ -36,3 +36,11 @@ def generate_cards(prompt: Prompt, model: str = DEFAULT_MODEL) -> GeneratedCards
         raise ValueError(message)
 
     return parse_generated_cards_json(cards_json)
+
+
+def list_model_names() -> list[str]:
+    """Return the names of the Ollama models available locally."""
+    models = ollama.list().models
+    model_names = [m.model for m in models if m.model is not None]
+
+    return sorted(model_names)

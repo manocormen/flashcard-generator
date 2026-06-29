@@ -32,7 +32,8 @@ def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(app_module.LOGGER, "exception", logs.append)
     monkeypatch.setattr(gr, "Warning", warnings.append)
 
-    list(app_module.run_flow(["example.md"]))  # run_flow yields: list helps consume it
+    # Since run_flow() yields, list() helps collect its outputs
+    list(app_module.run_flow(["example.md"], "dummy_model"))
 
     assert len(logs) == 1
     assert len(warnings) == 1

@@ -8,20 +8,21 @@ import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
 from pprint import pformat
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import gradio as gr
 
 from flashcard_generator.clean import clean_docs
 from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
-from flashcard_generator.generate import generate_cards
+from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_model_names
 from flashcard_generator.prompt import build_prompt
 
 if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
 
 type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str, ExportedCards | None]
+type GradioUpdate = dict[str, Any]
 
 # Explicit name needed because just dev runs this file as __main__
 LOGGER = logging.getLogger("flashcard_generator.app")
@@ -93,7 +94,7 @@ def show_results_view(rendered_cards: str | None, export: ExportedCards) -> View
     )
 
 
-def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
+def run_flow(gradio_paths: list[str], model: str) -> Generator[ViewState]:
     """Run the Gradio flashcard generation flow."""
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
@@ -124,7 +125,7 @@ def run_flow(gradio_paths: list[str]) -> Generator[ViewState]:
         yield show_progress_view(render_progress(steps_completed=4))
 
         time.sleep(STEPS_DELAY_SECONDS)
-        cards = generate_cards(prompt)
+        cards = generate_cards(prompt, model)
         LOGGER.info("Generated %s card(s).", len(cards.cards))
         LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
         yield show_progress_view(render_progress(steps_completed=5))
@@ -198,6 +199,18 @@ def reset_app_state(export: ExportedCards | None) -> ViewState:
     return show_upload_view()
 
 
+def update_model_choices() -> GradioUpdate:
+    """Update the model dropdown to reflect the models available locally."""
+    choices = list_model_names()
+
+    if not choices:
+        return gr.update()
+
+    value = DEFAULT_MODEL if DEFAULT_MODEL in choices else choices[0]
+
+    return gr.update(choices=choices, value=value)
+
+
 def create_app() -> gr.Blocks:
     """Return an app instance."""
     app = gr.Blocks(title="Flashcard Generator")
@@ -208,6 +221,12 @@ def create_app() -> gr.Blocks:
             files = gr.Files(
                 label="Learning materials: .txt .md .markdown .pdf",
                 file_types=[".txt", ".md", ".markdown", ".pdf"],
+            )
+            model_dropdown = gr.Dropdown(
+                label="Model",
+                choices=[DEFAULT_MODEL],
+                value=DEFAULT_MODEL,
+                interactive=True,
             )
             generate_button = gr.Button(
                 value="Generate Flashcards",
@@ -242,6 +261,11 @@ def create_app() -> gr.Blocks:
                 components=[files, progress_status, rendered_cards],
             )
 
+        app.load(
+            fn=update_model_choices,
+            outputs=model_dropdown,
+        )
+
         files.change(
             fn=lambda files: gr.Button(interactive=bool(files)),
             inputs=files,
@@ -262,7 +286,12 @@ def create_app() -> gr.Blocks:
             rendered_cards,
             export,
         ]
-        generate_button.click(fn=run_flow, inputs=files, outputs=outputs)
+
+        generate_button.click(
+            fn=run_flow,
+            inputs=[files, model_dropdown],
+            outputs=outputs,
+        )
 
         start_over_button.click(
             fn=reset_app_state,
