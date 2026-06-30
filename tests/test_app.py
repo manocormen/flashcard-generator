@@ -42,7 +42,7 @@ def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
     ("model_names", "expected_value"),
     [
         (["model1", DEFAULT_MODEL], DEFAULT_MODEL),
-        (["model1", "model2"], "model1"),
+        (["model1", "model2"], "model1"),  # If default is absent, select first model
     ],
 )
 def test_update_model_choices(
