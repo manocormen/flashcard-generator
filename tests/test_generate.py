@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from flashcard_generator.card import generated_cards_json_schema
-from flashcard_generator.generate import generate_cards
+from flashcard_generator.generate import generate_cards, list_model_names
 from flashcard_generator.prompt import Prompt
 
 
@@ -55,3 +55,35 @@ def test_missing_cards_json_raises_error(monkeypatch: pytest.MonkeyPatch) -> Non
         match=r"Ollama response didn't include card JSON data.",
     ):
         generate_cards(prompt, model="model")
+
+
+def test_list_model_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that local Ollama model names are correctly returned."""
+
+    def fake_list() -> SimpleNamespace:
+        return SimpleNamespace(
+            models=[
+                SimpleNamespace(model="model2"),
+                SimpleNamespace(model=None),
+                SimpleNamespace(model="model1"),
+            ],
+        )
+
+    monkeypatch.setattr("flashcard_generator.generate.ollama.list", fake_list)
+
+    assert list_model_names() == ["model1", "model2"]
+
+
+def test_list_model_names_no_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that unreachable Ollama is treated as no local models found."""
+
+    def raise_connection_error() -> None:
+        message = "Failed to connect to Ollama"
+        raise ConnectionError(message)
+
+    monkeypatch.setattr(
+        "flashcard_generator.generate.ollama.list",
+        raise_connection_error,
+    )
+
+    assert list_model_names() == []
