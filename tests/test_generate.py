@@ -72,3 +72,18 @@ def test_list_model_names(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("flashcard_generator.generate.ollama.list", fake_list)
 
     assert list_model_names() == ["model1", "model2"]
+
+
+def test_list_model_names_no_ollama(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that unreachable Ollama is treated as no local models found."""
+
+    def raise_connection_error() -> None:
+        message = "Failed to connect to Ollama"
+        raise ConnectionError(message)
+
+    monkeypatch.setattr(
+        "flashcard_generator.generate.ollama.list",
+        raise_connection_error,
+    )
+
+    assert list_model_names() == []

@@ -40,7 +40,11 @@ def generate_cards(prompt: Prompt, model: str = DEFAULT_MODEL) -> GeneratedCards
 
 def list_model_names() -> list[str]:
     """Return the names of the Ollama models available locally."""
-    models = ollama.list().models
+    try:
+        models = ollama.list().models
+    except ConnectionError:
+        return []
+
     model_names = [m.model for m in models if m.model is not None]
 
     return sorted(model_names)
