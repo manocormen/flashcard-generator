@@ -21,7 +21,15 @@ from flashcard_generator.prompt import build_prompt
 if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
 
-type ViewState = tuple[gr.Column, gr.Column, gr.Column, str, str, ExportedCards | None]
+type ViewState = tuple[
+    gr.Column,
+    gr.Column,
+    gr.Column,
+    gr.Column,
+    str,
+    str,
+    ExportedCards | None,
+]
 type GradioUpdate = dict[str, Any]
 
 # Explicit name needed because just dev runs this file as __main__
@@ -63,6 +71,7 @@ def show_upload_view() -> ViewState:
         gr.Column(visible=True),
         gr.Column(visible=False),
         gr.Column(visible=False),
+        gr.Column(visible=False),
         "",
         "",
         None,
@@ -76,6 +85,7 @@ def show_progress_view(progress: str) -> ViewState:
         gr.Column(visible=False),
         gr.Column(visible=True),
         gr.skip(),
+        gr.skip(),
         progress,
         gr.skip(),
         gr.skip(),
@@ -88,9 +98,36 @@ def show_results_view(rendered_cards: str | None, export: ExportedCards) -> View
         gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
+        gr.skip(),
         "",
         rendered_cards if rendered_cards is not None else "No cards generated.",
         export,
+    )
+
+
+def show_share_view() -> ViewState:
+    """Show the view for sharing cards locally."""
+    return (
+        gr.Column(visible=False),
+        gr.Column(visible=False),
+        gr.Column(visible=False),
+        gr.Column(visible=True),
+        gr.skip(),
+        gr.skip(),
+        gr.skip(),
+    )
+
+
+def exit_share_view() -> ViewState:
+    """Return to the results view after sharing."""
+    return (
+        gr.Column(visible=False),
+        gr.Column(visible=False),
+        gr.Column(visible=True),
+        gr.Column(visible=False),
+        gr.skip(),
+        gr.skip(),
+        gr.skip(),
     )
 
 
@@ -256,10 +293,16 @@ def create_app() -> gr.Blocks:
                     inputs=[format_dropdown, export],
                 )
 
+            share_button = gr.Button(value="Share via QR", variant="primary")
+
             start_over_button = gr.ClearButton(
                 value="Start Over",
                 components=[files, progress_status, rendered_cards],
             )
+
+        with gr.Column(visible=False) as share_view:
+            gr.Markdown("Share via QR")
+            stop_sharing_button = gr.Button(value="Stop Sharing")
 
         app.load(
             fn=update_model_choices,
@@ -282,6 +325,7 @@ def create_app() -> gr.Blocks:
             upload_view,
             progress_view,
             results_view,
+            share_view,
             progress_status,
             rendered_cards,
             export,
@@ -290,6 +334,16 @@ def create_app() -> gr.Blocks:
         generate_button.click(
             fn=run_flow,
             inputs=[files, model_dropdown],
+            outputs=outputs,
+        )
+
+        share_button.click(
+            fn=show_share_view,
+            outputs=outputs,
+        )
+
+        stop_sharing_button.click(
+            fn=exit_share_view,
             outputs=outputs,
         )
 
