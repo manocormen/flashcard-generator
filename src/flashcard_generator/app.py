@@ -8,18 +8,17 @@ import time
 from collections.abc import Generator  # noqa: TC003
 from pathlib import Path
 from pprint import pformat
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import gradio as gr
 
+from flashcard_generator.card import GeneratedCards
 from flashcard_generator.clean import clean_docs
 from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_model_names
 from flashcard_generator.prompt import build_prompt
-
-if TYPE_CHECKING:
-    from flashcard_generator.card import GeneratedCards
+from flashcard_generator.share import CardShare
 
 type ViewState = tuple[
     gr.Column,
@@ -28,9 +27,12 @@ type ViewState = tuple[
     gr.Column,
     str,
     str,
+    GeneratedCards | None,
     ExportedCards | None,
 ]
 type GradioUpdate = dict[str, Any]
+
+card_share = CardShare()
 
 # Explicit name needed because just dev runs this file as __main__
 LOGGER = logging.getLogger("flashcard_generator.app")
@@ -75,6 +77,7 @@ def show_upload_view() -> ViewState:
         "",
         "",
         None,
+        None,
     )
 
 
@@ -89,10 +92,15 @@ def show_progress_view(progress: str) -> ViewState:
         progress,
         gr.skip(),
         gr.skip(),
+        gr.skip(),
     )
 
 
-def show_results_view(rendered_cards: str | None, export: ExportedCards) -> ViewState:
+def show_results_view(
+    generated_cards: GeneratedCards | None,
+    rendered_cards: str | None,
+    export: ExportedCards,
+) -> ViewState:
     """Show the rendered cards and export options."""
     return (
         gr.Column(visible=False),
@@ -101,6 +109,7 @@ def show_results_view(rendered_cards: str | None, export: ExportedCards) -> View
         gr.skip(),
         "",
         rendered_cards if rendered_cards is not None else "No cards generated.",
+        generated_cards,
         export,
     )
 
@@ -115,6 +124,7 @@ def show_share_view() -> ViewState:
         gr.skip(),
         gr.skip(),
         gr.skip(),
+        gr.skip(),
     )
 
 
@@ -125,6 +135,7 @@ def exit_share_view() -> ViewState:
         gr.Column(visible=False),
         gr.Column(visible=True),
         gr.Column(visible=False),
+        gr.skip(),
         gr.skip(),
         gr.skip(),
         gr.skip(),
@@ -176,7 +187,7 @@ def run_flow(gradio_paths: list[str], model: str) -> Generator[ViewState]:
 
         time.sleep(STEPS_DELAY_SECONDS)
         rendered_cards = render_cards(cards)
-        yield show_results_view(rendered_cards, export)
+        yield show_results_view(cards, rendered_cards, export)
 
     except Exception as e:
         LOGGER.exception("There was an unexpected error while running the Gradio flow.")
@@ -233,6 +244,8 @@ def cleanup_export(export: ExportedCards | None) -> None:
 def reset_app_state(export: ExportedCards | None) -> ViewState:
     """Delete exported files and return to the upload view."""
     cleanup_export(export)
+    card_share.stop()
+
     return show_upload_view()
 
 
@@ -246,6 +259,31 @@ def update_model_choices() -> GradioUpdate:
     value = DEFAULT_MODEL if DEFAULT_MODEL in choices else choices[0]
 
     return gr.update(choices=choices, value=value)
+
+
+def start_sharing(cards: GeneratedCards | None) -> ViewState:
+    """Start sharing the generated cards."""
+    if cards is not None:
+        card_share.start(cards)
+
+    return show_share_view()
+
+
+def stop_sharing() -> ViewState:
+    """Stop sharing the generated cards."""
+    card_share.stop()
+
+    return exit_share_view()
+
+
+def get_shared_cards() -> dict[str, Any] | None:
+    """Return the currently-shared cards."""
+    cards = card_share.get()
+
+    if cards is None:
+        return None
+
+    return cards.model_dump()
 
 
 def create_app() -> gr.Blocks:
@@ -275,6 +313,7 @@ def create_app() -> gr.Blocks:
             progress_status = gr.Markdown()
 
         with gr.Column(visible=False) as results_view:
+            cards = gr.State()
             export = gr.State(delete_callback=cleanup_export)
 
             rendered_cards = gr.Markdown(container=True, max_height="60vh")
@@ -301,13 +340,15 @@ def create_app() -> gr.Blocks:
             )
 
         with gr.Column(visible=False) as share_view:
-            gr.Markdown("Share via QR")
+            gr.Markdown("Card sharing endpoint: POST `/gradio_api/api/cards`")
             stop_sharing_button = gr.Button(value="Stop Sharing")
 
         app.load(
             fn=update_model_choices,
             outputs=model_dropdown,
         )
+
+        gr.api(get_shared_cards, api_name="cards", queue=False)  # type: ignore[attr-defined]
 
         files.change(
             fn=lambda files: gr.Button(interactive=bool(files)),
@@ -328,6 +369,7 @@ def create_app() -> gr.Blocks:
             share_view,
             progress_status,
             rendered_cards,
+            cards,
             export,
         ]
 
@@ -338,12 +380,13 @@ def create_app() -> gr.Blocks:
         )
 
         share_button.click(
-            fn=show_share_view,
+            fn=start_sharing,
+            inputs=cards,
             outputs=outputs,
         )
 
         stop_sharing_button.click(
-            fn=exit_share_view,
+            fn=stop_sharing,
             outputs=outputs,
         )
 
