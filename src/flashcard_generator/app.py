@@ -265,6 +265,8 @@ def start_sharing(cards: GeneratedCards | None) -> ViewState:
     """Start sharing the generated cards."""
     if cards is not None:
         card_share.start(cards)
+        LOGGER.info("Started sharing %s card(s).", len(cards.cards))
+        LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
 
     return show_share_view()
 
@@ -272,6 +274,8 @@ def start_sharing(cards: GeneratedCards | None) -> ViewState:
 def stop_sharing() -> ViewState:
     """Stop sharing the generated cards."""
     card_share.stop()
+
+    LOGGER.info("Stopped sharing.")
 
     return exit_share_view()
 
@@ -282,6 +286,9 @@ def get_shared_cards() -> dict[str, Any] | None:
 
     if cards is None:
         return None
+
+    LOGGER.info("Served %s card(s).", len(cards.cards))
+    LOGGER.debug("Served card(s):\n%s", cards.model_dump_json(indent=2))
 
     return cards.model_dump()
 
