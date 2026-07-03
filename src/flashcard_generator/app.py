@@ -339,7 +339,7 @@ def create_app() -> gr.Blocks:
                     inputs=[format_dropdown, export],
                 )
 
-            share_button = gr.Button(value="Share via QR", variant="primary")
+            share_button = gr.Button(value="Share", variant="primary")
 
             start_over_button = gr.ClearButton(
                 value="Start Over",
@@ -355,6 +355,7 @@ def create_app() -> gr.Blocks:
             outputs=model_dropdown,
         )
 
+        # Gradio's type stubs don't expose gr.api yet
         gr.api(get_shared_cards, api_name="cards", queue=False)  # type: ignore[attr-defined]
 
         files.change(
