@@ -20,6 +20,7 @@ from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_mod
 from flashcard_generator.prompt import build_prompt
 from flashcard_generator.share import CardShare
 
+# TODO: Once stabilized, update to a type with named slots, for readability
 type ViewState = tuple[
     gr.Column,
     gr.Column,
