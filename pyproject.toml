@@ -38,6 +38,7 @@ strict = true
 
 [tool.ruff.lint]
 select = ["ALL"]
+ignore = ["TD002", "TD003", "FIX002"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]

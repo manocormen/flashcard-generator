@@ -4,6 +4,7 @@ import gradio as gr
 import pytest
 
 from flashcard_generator import app as app_module
+from flashcard_generator.card import BasicCard, GeneratedCards
 from flashcard_generator.generate import DEFAULT_MODEL
 
 
@@ -60,3 +61,18 @@ def test_update_model_choices(
     update = app_module.update_model_choices()
 
     assert update["value"] == expected_value
+
+
+def test_card_sharing() -> None:
+    """Test the card-sharing lifecycle."""
+    cards = GeneratedCards(cards=[BasicCard(front="front", back="back")])
+
+    assert app_module.get_shared_cards() is None
+
+    app_module.start_sharing(cards)
+
+    assert app_module.get_shared_cards() == cards.model_dump()
+
+    app_module.stop_sharing()
+
+    assert app_module.get_shared_cards() is None
