@@ -66,10 +66,11 @@ def test_update_model_choices(
 def test_card_sharing() -> None:
     """Test the card-sharing lifecycle."""
     cards = GeneratedCards(cards=[BasicCard(front="front", back="back")])
+    request = gr.Request(url={"port": 7860})
 
     assert app_module.get_shared_cards() is None
 
-    app_module.start_sharing(cards)
+    app_module.start_sharing(cards, request)
 
     assert app_module.get_shared_cards() == cards.model_dump()
 
