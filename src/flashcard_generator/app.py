@@ -12,6 +12,8 @@ from pprint import pformat
 from typing import Any
 
 import gradio as gr
+import qrcode  # type: ignore[import-untyped]
+from PIL import Image
 
 from flashcard_generator.card import GeneratedCards
 from flashcard_generator.clean import clean_docs
@@ -21,6 +23,7 @@ from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_mod
 from flashcard_generator.prompt import build_prompt
 from flashcard_generator.share import CardShare
 
+type QrCode = Image.Image
 # TODO: Once stabilized, update to a type with named slots, for readability
 type ViewState = tuple[
     gr.Column,
@@ -32,6 +35,7 @@ type ViewState = tuple[
     GeneratedCards | None,
     ExportedCards | None,
     str,
+    QrCode | None,
 ]
 type GradioUpdate = dict[str, Any]
 
@@ -85,6 +89,7 @@ def show_upload_view() -> ViewState:
         None,
         None,
         "",
+        None,
     )
 
 
@@ -97,6 +102,7 @@ def show_progress_view(progress: str) -> ViewState:
         gr.skip(),
         gr.skip(),
         progress,
+        gr.skip(),
         gr.skip(),
         gr.skip(),
         gr.skip(),
@@ -120,10 +126,11 @@ def show_results_view(
         generated_cards,
         export,
         gr.skip(),
+        gr.skip(),
     )
 
 
-def show_share_view(share_url: str) -> ViewState:
+def show_share_view(share_url: str, share_qr: QrCode) -> ViewState:
     """Show the view for sharing cards locally."""
     return (
         gr.Column(visible=False),
@@ -135,6 +142,7 @@ def show_share_view(share_url: str) -> ViewState:
         gr.skip(),
         gr.skip(),
         f"Card sharing endpoint: POST `{share_url}`",
+        share_qr,
     )
 
 
@@ -145,6 +153,7 @@ def exit_share_view() -> ViewState:
         gr.Column(visible=False),
         gr.Column(visible=True),
         gr.Column(visible=False),
+        gr.skip(),
         gr.skip(),
         gr.skip(),
         gr.skip(),
@@ -279,7 +288,10 @@ def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ViewStat
         LOGGER.info("Started sharing %s card(s).", len(cards.cards))
         LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
 
-    return show_share_view(get_share_url(request))
+    url = get_share_url(request)
+    qr = make_qr(url)
+
+    return show_share_view(url, qr)
 
 
 def stop_sharing() -> ViewState:
@@ -322,6 +334,13 @@ def get_share_url(request: gr.Request) -> str:
     port = request.url.port
 
     return f"http://{host}:{port}{CARDS_ENDPOINT}"
+
+
+def make_qr(url: str) -> QrCode:
+    """Return a QR code that encodes the input URL."""
+    qr_code: QrCode = qrcode.make(url).get_image()
+
+    return qr_code
 
 
 def create_app() -> gr.Blocks:
@@ -379,6 +398,7 @@ def create_app() -> gr.Blocks:
 
         with gr.Column(visible=False) as share_view:
             share_instructions = gr.Markdown()
+            share_qr = gr.Image(show_label=False, buttons=[])
             stop_sharing_button = gr.Button(value="Stop Sharing")
 
         app.load(
@@ -411,6 +431,7 @@ def create_app() -> gr.Blocks:
             cards,
             export,
             share_instructions,
+            share_qr,
         ]
 
         generate_button.click(
