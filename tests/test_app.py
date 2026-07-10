@@ -1,7 +1,10 @@
 """Tests for the Gradio app."""
 
+from types import SimpleNamespace
+
 import gradio as gr
 import pytest
+from PIL import Image
 
 from flashcard_generator import app as app_module
 from flashcard_generator.card import BasicCard, GeneratedCards
@@ -63,16 +66,33 @@ def test_update_model_choices(
     assert update["value"] == expected_value
 
 
-def test_card_sharing() -> None:
+def test_card_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test the card-sharing lifecycle."""
     cards = GeneratedCards(cards=[BasicCard(front="front", back="back")])
     request = gr.Request(url={"port": 7860})
+    lan_ip = "192.168.0.1"
+    qr_urls = []
+    qr_code = Image.new("1", (1, 1))
+    expected_url = "http://192.168.0.1:7860/gradio_api/api/cards"
+
+    def fake_get_lan_ip() -> str:
+        return lan_ip
+
+    def fake_make(url: str) -> SimpleNamespace:
+        qr_urls.append(url)
+        return SimpleNamespace(get_image=lambda: qr_code)
+
+    monkeypatch.setattr("flashcard_generator.app.get_lan_ip", fake_get_lan_ip)
+    monkeypatch.setattr("flashcard_generator.app.qrcode.make", fake_make)
 
     assert app_module.get_shared_cards() is None
 
-    app_module.start_sharing(cards, request)
+    share_view = app_module.start_sharing(cards, request)
 
     assert app_module.get_shared_cards() == cards.model_dump()
+    assert qr_urls == [expected_url]
+    assert any(expected_url in e for e in share_view if isinstance(e, str))
+    assert qr_code in share_view
 
     app_module.stop_sharing()
 
