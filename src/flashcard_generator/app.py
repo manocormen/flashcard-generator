@@ -283,10 +283,13 @@ def update_model_choices() -> GradioUpdate:
 
 def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ViewState:
     """Start sharing the generated cards."""
-    if cards is not None:
-        card_share.start(cards)
-        LOGGER.info("Started sharing %s card(s).", len(cards.cards))
-        LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
+    if cards is None or not cards.cards:
+        gr.Warning("No cards to share.")
+        return exit_share_view()
+
+    card_share.start(cards)
+    LOGGER.info("Started sharing %s card(s).", len(cards.cards))
+    LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
 
     url = get_share_url(request)
     qr = make_qr(url)
