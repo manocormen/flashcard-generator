@@ -61,7 +61,7 @@ just check          # Run all non-mutable QA: signal issues
 
 The app is structured as a pipeline with the following components:
 
-<todo-add-pipeline-image>
+<img width="4414" height="410" alt="flashcard-generator-pipeline" src="https://github.com/user-attachments/assets/144344fc-7987-4588-87e3-f3cbfa633d1d" />
 
 ## Structure
 
