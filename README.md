@@ -32,7 +32,7 @@ If you don't install it, replace `just` with `uv run just` in the commands below
 
 ## Demo
 
-<todo-video-demo>
+https://github.com/user-attachments/assets/7c85cf79-20fd-40d2-a1ba-4d97af894ccb
 
 ## Constraints
 
