@@ -61,6 +61,7 @@ STEPS = (
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
 
+# TODO: Tighten sharing: e.g. short-lived token + temp endpoint
 BIND_ADDRESS = "0.0.0.0"  # noqa: S104
 CARDS_ENDPOINT = "/gradio_api/api/cards"
 
