@@ -3,6 +3,7 @@
 import logging
 import os
 import shutil
+import socket
 import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
@@ -11,6 +12,8 @@ from pprint import pformat
 from typing import Any
 
 import gradio as gr
+import qrcode  # type: ignore[import-untyped]
+from PIL import Image
 
 from flashcard_generator.card import GeneratedCards
 from flashcard_generator.clean import clean_docs
@@ -20,6 +23,7 @@ from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_mod
 from flashcard_generator.prompt import build_prompt
 from flashcard_generator.share import CardShare
 
+type QrCode = Image.Image
 # TODO: Once stabilized, update to a type with named slots, for readability
 type ViewState = tuple[
     gr.Column,
@@ -30,6 +34,8 @@ type ViewState = tuple[
     str,
     GeneratedCards | None,
     ExportedCards | None,
+    str,
+    QrCode | None,
 ]
 type GradioUpdate = dict[str, Any]
 
@@ -55,6 +61,10 @@ STEPS = (
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
 
+# TODO: Tighten sharing: e.g. short-lived token + temp endpoint
+BIND_ADDRESS = "0.0.0.0"  # noqa: S104
+CARDS_ENDPOINT = "/gradio_api/api/cards"
+
 
 def render_progress(steps_completed: int) -> str:
     """Render pipeline progress as Markdown."""
@@ -79,6 +89,8 @@ def show_upload_view() -> ViewState:
         "",
         None,
         None,
+        "",
+        None,
     )
 
 
@@ -91,6 +103,8 @@ def show_progress_view(progress: str) -> ViewState:
         gr.skip(),
         gr.skip(),
         progress,
+        gr.skip(),
+        gr.skip(),
         gr.skip(),
         gr.skip(),
         gr.skip(),
@@ -112,10 +126,12 @@ def show_results_view(
         rendered_cards if rendered_cards is not None else "No cards generated.",
         generated_cards,
         export,
+        gr.skip(),
+        gr.skip(),
     )
 
 
-def show_share_view() -> ViewState:
+def show_share_view(share_url: str, share_qr: QrCode) -> ViewState:
     """Show the view for sharing cards locally."""
     return (
         gr.Column(visible=False),
@@ -126,6 +142,8 @@ def show_share_view() -> ViewState:
         gr.skip(),
         gr.skip(),
         gr.skip(),
+        f"Card sharing endpoint: POST `{share_url}`",
+        share_qr,
     )
 
 
@@ -136,6 +154,8 @@ def exit_share_view() -> ViewState:
         gr.Column(visible=False),
         gr.Column(visible=True),
         gr.Column(visible=False),
+        gr.skip(),
+        gr.skip(),
         gr.skip(),
         gr.skip(),
         gr.skip(),
@@ -262,14 +282,20 @@ def update_model_choices() -> GradioUpdate:
     return gr.update(choices=choices, value=value)
 
 
-def start_sharing(cards: GeneratedCards | None) -> ViewState:
+def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ViewState:
     """Start sharing the generated cards."""
-    if cards is not None:
-        card_share.start(cards)
-        LOGGER.info("Started sharing %s card(s).", len(cards.cards))
-        LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
+    if cards is None or not cards.cards:
+        gr.Warning("No cards to share.")
+        return exit_share_view()
 
-    return show_share_view()
+    card_share.start(cards)
+    LOGGER.info("Started sharing %s card(s).", len(cards.cards))
+    LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
+
+    url = get_share_url(request)
+    qr = make_qr(url)
+
+    return show_share_view(url, qr)
 
 
 def stop_sharing() -> ViewState:
@@ -292,6 +318,33 @@ def get_shared_cards() -> dict[str, Any] | None:
     LOGGER.debug("Served card(s):\n%s", cards.model_dump_json(indent=2))
 
     return cards.model_dump()
+
+
+def get_lan_ip() -> str:
+    """Return this machine's LAN IP."""
+    try:
+        # Trick for cross-OS reliability: https://stackoverflow.com/a/166589
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            host: str = s.getsockname()[0]
+            return host
+    except OSError:
+        return "127.0.0.1"
+
+
+def get_share_url(request: gr.Request) -> str:
+    """Return the URL exposing the shared cards on LAN."""
+    host = get_lan_ip()
+    port = request.url.port
+
+    return f"http://{host}:{port}{CARDS_ENDPOINT}"
+
+
+def make_qr(url: str) -> QrCode:
+    """Return a QR code that encodes the input URL."""
+    qr_code: QrCode = qrcode.make(url).get_image()
+
+    return qr_code
 
 
 def create_app() -> gr.Blocks:
@@ -348,7 +401,8 @@ def create_app() -> gr.Blocks:
             )
 
         with gr.Column(visible=False) as share_view:
-            gr.Markdown("Card sharing endpoint: POST `/gradio_api/api/cards`")
+            share_instructions = gr.Markdown()
+            share_qr = gr.Image(show_label=False, buttons=[])
             stop_sharing_button = gr.Button(value="Stop Sharing")
 
         app.load(
@@ -380,6 +434,8 @@ def create_app() -> gr.Blocks:
             rendered_cards,
             cards,
             export,
+            share_instructions,
+            share_qr,
         ]
 
         generate_button.click(
@@ -392,11 +448,13 @@ def create_app() -> gr.Blocks:
             fn=start_sharing,
             inputs=cards,
             outputs=outputs,
+            show_progress="hidden",
         )
 
         stop_sharing_button.click(
             fn=stop_sharing,
             outputs=outputs,
+            show_progress="hidden",
         )
 
         start_over_button.click(
@@ -421,7 +479,7 @@ def configure_logging() -> None:
 def main() -> None:
     """Launch the app."""
     configure_logging()
-    demo.launch(css=CSS)
+    demo.launch(css=CSS, server_name=BIND_ADDRESS)
 
 
 if __name__ == "__main__":

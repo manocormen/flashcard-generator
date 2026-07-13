@@ -13,6 +13,7 @@ dependencies = [
     "ollama>=0.6.2",
     "pydantic>=2.13.4",
     "pymupdf4llm>=1.27.2.3",
+    "qrcode[pil]>=8.2",
 ]
 
 [project.scripts]
