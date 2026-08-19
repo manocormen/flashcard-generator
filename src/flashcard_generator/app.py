@@ -96,12 +96,11 @@ def show_upload_view() -> ViewState:
 
 def show_progress_view(progress: str) -> ViewState:
     """Show the progress view with a pipeline progress indicator."""
-    # gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
     return (
         gr.Column(visible=False),
         gr.Column(visible=True),
-        gr.skip(),
-        gr.skip(),
+        gr.Column(visible=False),
+        gr.Column(visible=False),
         progress,
         gr.skip(),
         gr.skip(),
@@ -121,7 +120,7 @@ def show_results_view(
         gr.Column(visible=False),
         gr.Column(visible=False),
         gr.Column(visible=True),
-        gr.skip(),
+        gr.Column(visible=False),
         "",
         rendered_cards if rendered_cards is not None else "No cards generated.",
         generated_cards,
