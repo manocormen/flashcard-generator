@@ -87,12 +87,12 @@ def test_card_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert app_module.get_shared_cards() is None
 
-    share_view = app_module.start_sharing(cards, request)
+    share_update = app_module.start_sharing(cards, request)
 
     assert app_module.get_shared_cards() == cards.model_dump()
     assert qr_urls == [expected_url]
-    assert any(expected_url in e for e in share_view if isinstance(e, str))
-    assert qr_code in share_view
+    assert any(expected_url in e for e in share_update if isinstance(e, str))
+    assert qr_code in share_update
 
     app_module.stop_sharing()
 
