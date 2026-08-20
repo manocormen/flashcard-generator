@@ -7,6 +7,7 @@ import socket
 import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
+from enum import Enum, auto
 from pathlib import Path
 from pprint import pformat
 from typing import Any
@@ -24,6 +25,7 @@ from flashcard_generator.prompt import build_prompt
 from flashcard_generator.share import CardShare
 
 type QrCode = Image.Image
+
 # TODO: Once stabilized, update to a type with named slots, for readability
 type ViewState = tuple[
     gr.Column,
@@ -37,6 +39,20 @@ type ViewState = tuple[
     str,
     QrCode | None,
 ]
+
+type ScreenUpdate = tuple[
+    gr.Column,
+    gr.Column,
+    gr.Column,
+    gr.Column,
+]
+
+type ShareUpdate = tuple[
+    *ScreenUpdate,
+    str,
+    QrCode,
+]
+
 type GradioUpdate = dict[str, Any]
 
 card_share = CardShare()
@@ -66,6 +82,15 @@ BIND_ADDRESS = "0.0.0.0"  # noqa: S104
 CARDS_ENDPOINT = "/gradio_api/api/cards"
 
 
+class Screen(Enum):
+    """App screens."""
+
+    UPLOAD = auto()
+    PROGRESS = auto()
+    RESULTS = auto()
+    SHARE = auto()
+
+
 def render_progress(steps_completed: int) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
@@ -78,13 +103,20 @@ def render_progress(steps_completed: int) -> str:
     return "\n".join(lines)
 
 
+def show_screen(screen: Screen) -> ScreenUpdate:
+    """Show the requested screen."""
+    return (
+        gr.Column(visible=screen is Screen.UPLOAD),
+        gr.Column(visible=screen is Screen.PROGRESS),
+        gr.Column(visible=screen is Screen.RESULTS),
+        gr.Column(visible=screen is Screen.SHARE),
+    )
+
+
 def show_upload_view() -> ViewState:
     """Show the file upload view."""
     return (
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
+        *show_screen(Screen.UPLOAD),
         "",
         "",
         None,
@@ -97,10 +129,7 @@ def show_upload_view() -> ViewState:
 def show_progress_view(progress: str) -> ViewState:
     """Show the progress view with a pipeline progress indicator."""
     return (
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
+        *show_screen(Screen.PROGRESS),
         progress,
         gr.skip(),
         gr.skip(),
@@ -117,10 +146,7 @@ def show_results_view(
 ) -> ViewState:
     """Show the rendered cards and export options."""
     return (
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.Column(visible=False),
+        *show_screen(Screen.RESULTS),
         "",
         rendered_cards if rendered_cards is not None else "No cards generated.",
         generated_cards,
@@ -130,35 +156,12 @@ def show_results_view(
     )
 
 
-def show_share_view(share_url: str, share_qr: QrCode) -> ViewState:
-    """Show the view for sharing cards locally."""
+def show_share_screen(share_url: str, share_qr: QrCode) -> ShareUpdate:
+    """Show the card-sharing screen."""
     return (
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
+        *show_screen(Screen.SHARE),
         f"Card sharing endpoint: POST `{share_url}`",
         share_qr,
-    )
-
-
-def exit_share_view() -> ViewState:
-    """Return to the results view after sharing."""
-    return (
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
     )
 
 
@@ -281,11 +284,15 @@ def update_model_choices() -> GradioUpdate:
     return gr.update(choices=choices, value=value)
 
 
-def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ViewState:
+def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ShareUpdate:
     """Start sharing the generated cards."""
     if cards is None or not cards.cards:
         gr.Warning("No cards to share.")
-        return exit_share_view()
+        return (
+            *show_screen(Screen.RESULTS),
+            gr.skip(),
+            gr.skip(),
+        )
 
     card_share.start(cards)
     LOGGER.info("Started sharing %s card(s).", len(cards.cards))
@@ -294,16 +301,16 @@ def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ViewStat
     url = get_share_url(request)
     qr = make_qr(url)
 
-    return show_share_view(url, qr)
+    return show_share_screen(url, qr)
 
 
-def stop_sharing() -> ViewState:
+def stop_sharing() -> ScreenUpdate:
     """Stop sharing the generated cards."""
     card_share.stop()
 
     LOGGER.info("Stopped sharing.")
 
-    return exit_share_view()
+    return show_screen(Screen.RESULTS)
 
 
 def get_shared_cards() -> dict[str, Any] | None:
@@ -424,15 +431,25 @@ def create_app() -> gr.Blocks:
             outputs=download_button,
         )
 
-        outputs = [
+        screen_outputs = [
             upload_view,
             progress_view,
             results_view,
             share_view,
+        ]
+
+        outputs = [
+            *screen_outputs,
             progress_status,
             rendered_cards,
             cards,
             export,
+            share_instructions,
+            share_qr,
+        ]
+
+        share_outputs = [
+            *screen_outputs,
             share_instructions,
             share_qr,
         ]
@@ -446,13 +463,13 @@ def create_app() -> gr.Blocks:
         share_button.click(
             fn=start_sharing,
             inputs=cards,
-            outputs=outputs,
+            outputs=share_outputs,
             show_progress="hidden",
         )
 
         stop_sharing_button.click(
             fn=stop_sharing,
-            outputs=outputs,
+            outputs=screen_outputs,
             show_progress="hidden",
         )
 
