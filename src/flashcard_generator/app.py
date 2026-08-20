@@ -7,6 +7,7 @@ import socket
 import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
+from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
 from pprint import pformat
@@ -92,6 +93,24 @@ class Screen(Enum):
     SHARE = auto()
 
 
+@dataclass
+class PipelineProgress:
+    """Report completed pipeline steps."""
+
+    steps_completed: int
+
+
+@dataclass
+class PipelineResult:
+    """Contain the generated cards and their exports."""
+
+    cards: GeneratedCards
+    export: ExportedCards
+
+
+type PipelineEvent = PipelineProgress | PipelineResult
+
+
 def render_progress(steps_completed: int) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
@@ -160,52 +179,57 @@ def show_share_screen(share_url: str, share_qr: QrCode) -> ShareUpdate:
     )
 
 
+def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
+    """Run the flashcard-generation pipeline."""
+    yield PipelineProgress(steps_completed=1)
+
+    extraction = extract_docs(paths)
+    LOGGER.info(
+        "Extracted %s document(s); skipped %s file(s).",
+        len(extraction.docs),
+        len(extraction.rejected_paths),
+    )
+    LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
+    yield PipelineProgress(steps_completed=2)
+
+    cleaned_docs = clean_docs(extraction.docs)
+    LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
+    LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
+    yield PipelineProgress(steps_completed=3)
+
+    prompt = build_prompt(cleaned_docs)
+    LOGGER.info("Prompt built.")
+    LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
+    yield PipelineProgress(steps_completed=4)
+
+    cards = generate_cards(prompt, model)
+    LOGGER.info("Generated %s card(s).", len(cards.cards))
+    LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
+    yield PipelineProgress(steps_completed=5)
+
+    output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
+    export = export_cards(cards, output_dir)
+    LOGGER.info("Exported card file(s): %s.", output_dir)
+    LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
+    yield PipelineProgress(steps_completed=6)
+
+    yield PipelineResult(cards=cards, export=export)
+
+
 def run_flow(gradio_paths: list[str], model: str) -> Generator[GenerationUpdate]:
-    """Run the Gradio flashcard generation flow."""
+    """Run the pipeline and translate its events into Gradio updates."""
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
 
     try:
-        yield show_progress_screen(render_progress(steps_completed=1))
+        for event in run_pipeline(filepaths, model):
+            if isinstance(event, PipelineProgress):
+                yield show_progress_screen(render_progress(event.steps_completed))
+                time.sleep(STEPS_DELAY_SECONDS)
+                continue
 
-        time.sleep(STEPS_DELAY_SECONDS)
-        extraction = extract_docs(filepaths)
-        LOGGER.info(
-            "Extracted %s document(s); skipped %s file(s).",
-            len(extraction.docs),
-            len(extraction.rejected_paths),
-        )
-        LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
-        yield show_progress_screen(render_progress(steps_completed=2))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        cleaned_docs = clean_docs(extraction.docs)
-        LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
-        LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
-        yield show_progress_screen(render_progress(steps_completed=3))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        prompt = build_prompt(cleaned_docs)
-        LOGGER.info("Prompt built.")
-        LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
-        yield show_progress_screen(render_progress(steps_completed=4))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        cards = generate_cards(prompt, model)
-        LOGGER.info("Generated %s card(s).", len(cards.cards))
-        LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
-        yield show_progress_screen(render_progress(steps_completed=5))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
-        export = export_cards(cards, output_dir)
-        LOGGER.info("Exported card file(s): %s.", output_dir)
-        LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
-        yield show_progress_screen(render_progress(steps_completed=6))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        rendered_cards = render_cards(cards)
-        yield show_results_screen(cards, rendered_cards, export)
+            rendered_cards = render_cards(event.cards)
+            yield show_results_screen(event.cards, rendered_cards, event.export)
 
     except Exception as e:
         LOGGER.exception("There was an unexpected error while running the Gradio flow.")
