@@ -4,13 +4,10 @@ import logging
 import os
 import shutil
 import socket
-import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
-from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
-from pprint import pformat
 from typing import Any
 
 import gradio as gr
@@ -18,11 +15,9 @@ import qrcode  # type: ignore[import-untyped]
 from PIL import Image
 
 from flashcard_generator.card import GeneratedCards
-from flashcard_generator.clean import clean_docs
-from flashcard_generator.export import ExportedCards, export_cards
-from flashcard_generator.extract import extract_docs
-from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_model_names
-from flashcard_generator.prompt import build_prompt
+from flashcard_generator.export import ExportedCards
+from flashcard_generator.generate import DEFAULT_MODEL, list_model_names
+from flashcard_generator.pipeline import PipelineProgress, run_pipeline
 from flashcard_generator.share import CardShare
 
 type QrCode = Image.Image
@@ -93,24 +88,6 @@ class Screen(Enum):
     SHARE = auto()
 
 
-@dataclass
-class PipelineProgress:
-    """Report completed pipeline steps."""
-
-    steps_completed: int
-
-
-@dataclass
-class PipelineResult:
-    """Contain the generated cards and their exports."""
-
-    cards: GeneratedCards
-    export: ExportedCards
-
-
-type PipelineEvent = PipelineProgress | PipelineResult
-
-
 def render_progress(steps_completed: int) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
@@ -177,43 +154,6 @@ def show_share_screen(share_url: str, share_qr: QrCode) -> ShareUpdate:
         f"Card sharing endpoint: POST `{share_url}`",
         share_qr,
     )
-
-
-def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
-    """Run the flashcard-generation pipeline."""
-    yield PipelineProgress(steps_completed=1)
-
-    extraction = extract_docs(paths)
-    LOGGER.info(
-        "Extracted %s document(s); skipped %s file(s).",
-        len(extraction.docs),
-        len(extraction.rejected_paths),
-    )
-    LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
-    yield PipelineProgress(steps_completed=2)
-
-    cleaned_docs = clean_docs(extraction.docs)
-    LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
-    LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
-    yield PipelineProgress(steps_completed=3)
-
-    prompt = build_prompt(cleaned_docs)
-    LOGGER.info("Prompt built.")
-    LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
-    yield PipelineProgress(steps_completed=4)
-
-    cards = generate_cards(prompt, model)
-    LOGGER.info("Generated %s card(s).", len(cards.cards))
-    LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
-    yield PipelineProgress(steps_completed=5)
-
-    output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
-    export = export_cards(cards, output_dir)
-    LOGGER.info("Exported card file(s): %s.", output_dir)
-    LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
-    yield PipelineProgress(steps_completed=6)
-
-    yield PipelineResult(cards=cards, export=export)
 
 
 def run_flow(gradio_paths: list[str], model: str) -> Generator[GenerationUpdate]:

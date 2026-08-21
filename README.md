@@ -81,6 +81,7 @@ The project is broken down into the following modules, which roughly correspond 
 │       ├── export.py       # Card exporting
 │       ├── extract.py      # Document extracting
 │       ├── generate.py     # Card generation
+│       ├── pipeline.py     # Pipeline orchestration
 │       ├── prompt.py       # Prompt definitions
 │       └── share.py        # Card sharing
 ├── tests

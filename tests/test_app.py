@@ -22,14 +22,13 @@ def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that errors during the Gradio flow are logged and shown."""
     message = "Error during document extraction."
 
-    def raise_error(_paths: object) -> None:
+    def raise_error(_paths: object, _model: str) -> None:
         raise RuntimeError(message)
 
     logs: list[str] = []
     warnings: list[str] = []
 
-    monkeypatch.setattr(app_module, "extract_docs", raise_error)
-    monkeypatch.setattr(app_module, "STEPS_DELAY_SECONDS", 0)
+    monkeypatch.setattr(app_module, "run_pipeline", raise_error)
     monkeypatch.setattr(app_module.LOGGER, "exception", logs.append)
     monkeypatch.setattr(gr, "Warning", warnings.append)
 
