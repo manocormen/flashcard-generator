@@ -434,7 +434,7 @@ def configure_logging() -> None:
 def main() -> None:
     """Launch the app."""
     configure_logging()
-    demo.launch(css=CSS, server_name=BIND_ADDRESS)
+    demo.launch(css=CSS, footer_links=[], server_name=BIND_ADDRESS)
 
 
 if __name__ == "__main__":
