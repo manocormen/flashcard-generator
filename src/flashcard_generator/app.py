@@ -253,12 +253,12 @@ def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ShareUpd
             gr.skip(),
         )
 
+    url = get_share_url(request)
+    qr = make_qr(url)
+
     card_share.start(cards)
     LOGGER.info("Started sharing %s card(s).", len(cards.cards))
     LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
-
-    url = get_share_url(request)
-    qr = make_qr(url)
 
     return show_share_screen(url, qr)
 
