@@ -26,11 +26,11 @@ class GeneratedCards(BaseModel):
     cards: list[BasicCard]
 
 
-def generated_cards_json_schema() -> JsonSchemaValue:
-    """Return the JSON card schema for enforcing structured outputs."""
+def build_cards_json_schema() -> JsonSchemaValue:
+    """Build the JSON card schema for enforcing structured outputs."""
     return GeneratedCards.model_json_schema()
 
 
-def parse_generated_cards_json(raw_json: str) -> GeneratedCards:
+def parse_cards_json(raw_json: str) -> GeneratedCards:
     """Validate and parse the generated cards against the card model."""
     return GeneratedCards.model_validate_json(raw_json)
