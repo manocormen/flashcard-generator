@@ -3,7 +3,6 @@
 import logging
 import os
 import shutil
-import socket
 import time
 from collections.abc import Generator  # noqa: TC003
 from enum import Enum, auto
@@ -11,16 +10,12 @@ from pathlib import Path
 from typing import Any
 
 import gradio as gr
-import qrcode  # type: ignore[import-untyped]
-from PIL import Image
 
 from flashcard_generator.card import GeneratedCards
 from flashcard_generator.export import ExportedCards
 from flashcard_generator.generate import DEFAULT_MODEL, list_model_names
 from flashcard_generator.pipeline import PipelineProgress, run_pipeline
-from flashcard_generator.share import CardShare
-
-type QrCode = Image.Image
+from flashcard_generator.share import CardShare, QRCode, get_lan_ip, make_qr
 
 # TODO: Once stabilized, update to types with named slots, for readability
 type ScreenUpdate = tuple[
@@ -41,13 +36,13 @@ type GenerationUpdate = tuple[
 type ShareUpdate = tuple[
     *ScreenUpdate,
     str,
-    QrCode,
+    QRCode,
 ]
 
 type ResetUpdate = tuple[
     *GenerationUpdate,
     str,  # share instructions
-    QrCode | None,
+    QRCode | None,
 ]
 
 type GradioUpdate = dict[str, Any]
@@ -147,7 +142,7 @@ def show_results_screen(
     )
 
 
-def show_share_screen(share_url: str, share_qr: QrCode) -> ShareUpdate:
+def show_share_screen(share_url: str, share_qr: QRCode) -> ShareUpdate:
     """Show the card-sharing screen."""
     return (
         *show_screen(Screen.SHARE),
@@ -285,31 +280,12 @@ def get_shared_cards() -> dict[str, Any] | None:
     return cards.model_dump()
 
 
-def get_lan_ip() -> str:
-    """Return this machine's LAN IP."""
-    try:
-        # Trick for cross-OS reliability: https://stackoverflow.com/a/166589
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            host: str = s.getsockname()[0]
-            return host
-    except OSError:
-        return "127.0.0.1"
-
-
 def get_share_url(request: gr.Request) -> str:
     """Return the URL exposing the shared cards on LAN."""
     host = get_lan_ip()
     port = request.url.port
 
     return f"http://{host}:{port}{CARDS_ENDPOINT}"
-
-
-def make_qr(url: str) -> QrCode:
-    """Return a QR code that encodes the input URL."""
-    qr_code: QrCode = qrcode.make(url).get_image()
-
-    return qr_code
 
 
 def create_app() -> gr.Blocks:

@@ -82,7 +82,7 @@ def test_card_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(get_image=lambda: qr_code)
 
     monkeypatch.setattr("flashcard_generator.app.get_lan_ip", fake_get_lan_ip)
-    monkeypatch.setattr("flashcard_generator.app.qrcode.make", fake_make)
+    monkeypatch.setattr("flashcard_generator.share.qrcode.make", fake_make)
 
     assert app_module.get_shared_cards() is None
 
