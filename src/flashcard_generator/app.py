@@ -312,7 +312,7 @@ def create_app() -> gr.Blocks:
             )
 
         with gr.Column(visible=False) as progress_screen:
-            progress_status = gr.Markdown()
+            progress_status = gr.Markdown(padding=True)
 
         with gr.Column(visible=False) as results_screen:
             cards = gr.State()
