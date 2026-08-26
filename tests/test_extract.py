@@ -23,8 +23,9 @@ def test_extract_docs_from_supported_text_file(tmp_path: Path, extension: str) -
     """Test extracting docs from a single text file with a supported extension."""
     path = tmp_path / f"example{extension}"
     path.write_text(PANGRAM, encoding="utf-8")
+    images_root = tmp_path
 
-    extraction = extract_docs([path])
+    extraction = extract_docs([path], images_root)
 
     assert extraction.docs == [Doc(path=path, text=PANGRAM)]
     assert extraction.rejected_paths == []
@@ -34,13 +35,14 @@ def test_extract_docs_from_supported_text_file(tmp_path: Path, extension: str) -
 def test_extract_docs_from_text_pdf_file(tmp_path: Path, extension: str) -> None:
     """Test extracting a doc from a text-based PDF file."""
     pdf_path = tmp_path / f"example{extension}"
+    images_root = tmp_path
     text = "Only review what you need, when you need it!"
 
     with pymupdf.open() as pdf:  # type: ignore[no-untyped-call]
         pdf.new_page().insert_text(point=(64, 64), text=text)
         pdf.save(str(pdf_path))
 
-    extraction = extract_docs([pdf_path])
+    extraction = extract_docs([pdf_path], images_root)
 
     assert extraction.rejected_paths == []
     assert len(extraction.docs) == 1
@@ -55,8 +57,9 @@ def test_extract_docs_from_unsupported_file(tmp_path: Path, extension: str) -> N
     """Test rejecting a file without a supported extension."""
     unsupported_path = tmp_path / f"example{extension}"
     unsupported_path.touch()
+    images_root = tmp_path
 
-    extraction = extract_docs([unsupported_path])
+    extraction = extract_docs([unsupported_path], images_root)
 
     assert extraction.docs == []
     assert extraction.rejected_paths == [
@@ -72,6 +75,7 @@ def test_extract_docs_from_mixed_files(tmp_path: Path) -> None:
     supported_path1 = tmp_path / "example.txt"
     supported_path2 = tmp_path / "example.md"
     unsupported_path = tmp_path / "example.unsupported"
+    images_root = tmp_path
 
     text1 = f"{PANGRAM} 1"
     text2 = f"{PANGRAM} 2"
@@ -80,7 +84,10 @@ def test_extract_docs_from_mixed_files(tmp_path: Path) -> None:
     supported_path2.write_text(text2, encoding="utf-8")
     unsupported_path.touch()
 
-    extraction = extract_docs([supported_path1, unsupported_path, supported_path2])
+    extraction = extract_docs(
+        [supported_path1, unsupported_path, supported_path2],
+        images_root,
+    )
 
     assert extraction.docs == [
         Doc(path=supported_path1, text=text1),
@@ -98,8 +105,9 @@ def test_extract_docs_from_non_utf8_file(tmp_path: Path) -> None:
     """Test rejecting a supported file that isn't UTF-8 encoded."""
     non_utf8_path = tmp_path / "example.txt"
     non_utf8_path.write_text(PANGRAM, encoding="cp1252")
+    images_root = tmp_path
 
-    extraction = extract_docs([non_utf8_path])
+    extraction = extract_docs([non_utf8_path], images_root)
 
     assert extraction.docs == []
     assert extraction.rejected_paths == [
@@ -110,8 +118,9 @@ def test_extract_docs_from_non_utf8_file(tmp_path: Path) -> None:
 def test_extract_docs_from_non_existent_file(tmp_path: Path) -> None:
     """Test trying to extract docs from a non-existing file."""
     fileless_path = tmp_path / "example.txt"
+    images_root = tmp_path
 
-    extraction = extract_docs([fileless_path])
+    extraction = extract_docs([fileless_path], images_root)
 
     assert extraction.docs == []
     assert extraction.rejected_paths == [
