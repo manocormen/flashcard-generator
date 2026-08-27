@@ -14,7 +14,7 @@ import gradio as gr
 from flashcard_generator.card import GeneratedCards
 from flashcard_generator.export import ExportedCards
 from flashcard_generator.generate import DEFAULT_MODEL, list_model_names
-from flashcard_generator.pipeline import PipelineProgress, run_pipeline
+from flashcard_generator.pipeline import PipelineStep, run_pipeline
 from flashcard_generator.share import CardShare, QRCode, get_lan_ip, make_qr
 
 # TODO: Once stabilized, update to types with named slots, for readability
@@ -58,14 +58,14 @@ CSS = """
 }
 """
 
-STEPS = (
-    "Files uploaded",
-    "Text extracted",
-    "Text cleaned",
-    "Prompt built",
-    "Cards generated",
-    "Downloads ready",
-)
+STEP_LABELS = {
+    PipelineStep.FILES_UPLOADED: "Files uploaded",
+    PipelineStep.TEXT_EXTRACTED: "Text extracted",
+    PipelineStep.TEXT_CLEANED: "Text cleaned",
+    PipelineStep.PROMPT_BUILT: "Prompt built",
+    PipelineStep.CARDS_GENERATED: "Cards generated",
+    PipelineStep.CARDS_EXPORTED: "Downloads ready",
+}
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
 
@@ -83,14 +83,14 @@ class Screen(Enum):
     SHARE = auto()
 
 
-def render_progress(steps_completed: int) -> str:
+def render_progress(completed_step: PipelineStep) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
 
-    for index, stage in enumerate(STEPS):
-        checkbox = "[x]" if index < steps_completed else "[ ]"
+    for step in PipelineStep:
+        checkbox = "[x]" if step <= completed_step else "[ ]"
 
-        lines.append(f"- {checkbox} {stage}")
+        lines.append(f"- {checkbox} {STEP_LABELS[step]}")
 
     return "\n".join(lines)
 
@@ -158,8 +158,8 @@ def run_flow(gradio_paths: list[str], model: str) -> Generator[GenerationUpdate]
 
     try:
         for event in run_pipeline(filepaths, model):
-            if isinstance(event, PipelineProgress):
-                yield show_progress_screen(render_progress(event.steps_completed))
+            if isinstance(event, PipelineStep):
+                yield show_progress_screen(render_progress(event))
                 time.sleep(STEPS_DELAY_SECONDS)
                 continue
 

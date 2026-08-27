@@ -4,6 +4,7 @@ import logging
 import shutil
 import tempfile
 from dataclasses import dataclass
+from enum import IntEnum, auto
 from pathlib import Path
 from pprint import pformat
 from typing import TYPE_CHECKING
@@ -22,11 +23,15 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
-class PipelineProgress:
-    """Report completed pipeline steps."""
+class PipelineStep(IntEnum):
+    """Pipeline steps in execution order."""
 
-    steps_completed: int
+    FILES_UPLOADED = auto()
+    TEXT_EXTRACTED = auto()
+    TEXT_CLEANED = auto()
+    PROMPT_BUILT = auto()
+    CARDS_GENERATED = auto()
+    CARDS_EXPORTED = auto()
 
 
 @dataclass
@@ -37,12 +42,12 @@ class PipelineResult:
     export: ExportedCards
 
 
-type PipelineEvent = PipelineProgress | PipelineResult
+type PipelineEvent = PipelineStep | PipelineResult
 
 
 def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
     """Run the flashcard-generation pipeline."""
-    yield PipelineProgress(steps_completed=1)
+    yield PipelineStep.FILES_UPLOADED
 
     extraction = extract_docs(paths)
     LOGGER.info(
@@ -51,22 +56,22 @@ def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
         len(extraction.rejected_paths),
     )
     LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
-    yield PipelineProgress(steps_completed=2)
+    yield PipelineStep.TEXT_EXTRACTED
 
     cleaned_docs = clean_docs(extraction.docs)
     LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
     LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
-    yield PipelineProgress(steps_completed=3)
+    yield PipelineStep.TEXT_CLEANED
 
     prompt = build_prompt(cleaned_docs)
     LOGGER.info("Prompt built.")
     LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
-    yield PipelineProgress(steps_completed=4)
+    yield PipelineStep.PROMPT_BUILT
 
     cards = generate_cards(prompt, model)
     LOGGER.info("Generated %s card(s).", len(cards.cards))
     LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
-    yield PipelineProgress(steps_completed=5)
+    yield PipelineStep.CARDS_GENERATED
 
     output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
     try:
@@ -76,6 +81,6 @@ def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
         raise
     LOGGER.info("Exported card file(s): %s.", output_dir)
     LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
-    yield PipelineProgress(steps_completed=6)
+    yield PipelineStep.CARDS_EXPORTED
 
     yield PipelineResult(cards=cards, export=export)
