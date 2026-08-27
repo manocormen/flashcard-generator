@@ -11,15 +11,8 @@ from flashcard_generator.card import BasicCard, GeneratedCards
 from flashcard_generator.generate import DEFAULT_MODEL
 
 
-def test_create_app() -> None:
-    """Test that create_app() returns a valid Gradio instance."""
-    app = app_module.create_app()
-
-    assert type(app) is gr.Blocks
-
-
-def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that errors during the Gradio flow are logged and shown."""
+def test_run_generation_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that errors during card generation are logged and shown."""
     message = "Error during document extraction."
 
     def raise_error(_paths: object, _model: str) -> None:
@@ -32,8 +25,8 @@ def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(app_module.LOGGER, "exception", logs.append)
     monkeypatch.setattr(gr, "Warning", warnings.append)
 
-    # Since run_flow() yields, list() helps collect its outputs
-    list(app_module.run_flow(["example.md"], "dummy_model"))
+    # Since run_generation() yields, list() helps collect its outputs
+    list(app_module.run_generation(["example.md"], "dummy_model"))
 
     assert len(logs) == 1
     assert len(warnings) == 1
@@ -60,9 +53,9 @@ def test_update_model_choices(
 
     monkeypatch.setattr(app_module, "list_model_names", fake_list_model_names)
 
-    update = app_module.update_model_choices()
+    dropdown = app_module.update_model_choices()
 
-    assert update["value"] == expected_value
+    assert dropdown.value == expected_value
 
 
 def test_card_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,8 +83,8 @@ def test_card_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert app_module.get_shared_cards() == cards.model_dump()
     assert qr_urls == [expected_url]
-    assert any(expected_url in e for e in share_update if isinstance(e, str))
-    assert qr_code in share_update
+    assert expected_url in share_update[app_module.share_instructions]
+    assert share_update[app_module.share_qr_image] is qr_code
 
     app_module.stop_sharing()
 
