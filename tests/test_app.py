@@ -22,14 +22,13 @@ def test_run_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that errors during the Gradio flow are logged and shown."""
     message = "Error during document extraction."
 
-    def raise_error(_paths: object) -> None:
+    def raise_error(_paths: object, _model: str) -> None:
         raise RuntimeError(message)
 
     logs: list[str] = []
     warnings: list[str] = []
 
-    monkeypatch.setattr(app_module, "extract_docs", raise_error)
-    monkeypatch.setattr(app_module, "STEPS_DELAY_SECONDS", 0)
+    monkeypatch.setattr(app_module, "run_pipeline", raise_error)
     monkeypatch.setattr(app_module.LOGGER, "exception", logs.append)
     monkeypatch.setattr(gr, "Warning", warnings.append)
 
@@ -83,16 +82,16 @@ def test_card_sharing(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(get_image=lambda: qr_code)
 
     monkeypatch.setattr("flashcard_generator.app.get_lan_ip", fake_get_lan_ip)
-    monkeypatch.setattr("flashcard_generator.app.qrcode.make", fake_make)
+    monkeypatch.setattr("flashcard_generator.share.qrcode.make", fake_make)
 
     assert app_module.get_shared_cards() is None
 
-    share_view = app_module.start_sharing(cards, request)
+    share_update = app_module.start_sharing(cards, request)
 
     assert app_module.get_shared_cards() == cards.model_dump()
     assert qr_urls == [expected_url]
-    assert any(expected_url in e for e in share_view if isinstance(e, str))
-    assert qr_code in share_view
+    assert any(expected_url in e for e in share_update if isinstance(e, str))
+    assert qr_code in share_update
 
     app_module.stop_sharing()
 

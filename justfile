@@ -40,6 +40,9 @@ lint:
 # Check typing
 [group("Non-Mutating QA")]
 typecheck:
+    # TODO: Remove this workaround once the upstream bug fixed:
+    # github.com/gradio-app/gradio/issues/13781
+    uv run python -c "import gradio"
     uv run mypy .
 
 # Run tests

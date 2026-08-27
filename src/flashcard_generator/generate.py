@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 import ollama
 
 from flashcard_generator.card import (
-    generated_cards_json_schema,
-    parse_generated_cards_json,
+    build_cards_json_schema,
+    parse_cards_json,
 )
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ def generate_cards(prompt: Prompt, model: str = DEFAULT_MODEL) -> GeneratedCards
             {"role": "system", "content": prompt.system},
             {"role": "user", "content": prompt.user},
         ],
-        format=generated_cards_json_schema(),
+        format=build_cards_json_schema(),
         # Low temperatures are recommended for structured outputs:
         # https://docs.ollama.com/capabilities/structured-outputs#tips-for-reliable-structured-outputs
         options={"temperature": 0},
@@ -35,7 +35,7 @@ def generate_cards(prompt: Prompt, model: str = DEFAULT_MODEL) -> GeneratedCards
         message = "Ollama response didn't include card JSON data."
         raise ValueError(message)
 
-    return parse_generated_cards_json(cards_json)
+    return parse_cards_json(cards_json)
 
 
 def list_model_names() -> list[str]:

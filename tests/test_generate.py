@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from flashcard_generator.card import generated_cards_json_schema
+from flashcard_generator.card import build_cards_json_schema
 from flashcard_generator.generate import generate_cards, list_model_names
 from flashcard_generator.prompt import Prompt
 
@@ -32,7 +32,7 @@ def test_generate_cards_args_and_return(monkeypatch: pytest.MonkeyPatch) -> None
                 {"role": "system", "content": "system"},
                 {"role": "user", "content": "user"},
             ],
-            "format": generated_cards_json_schema(),
+            "format": build_cards_json_schema(),
             "options": {"temperature": 0},
         },
     ]

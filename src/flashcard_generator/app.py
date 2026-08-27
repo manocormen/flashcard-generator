@@ -3,40 +3,48 @@
 import logging
 import os
 import shutil
-import socket
-import tempfile
 import time
 from collections.abc import Generator  # noqa: TC003
+from enum import Enum, auto
 from pathlib import Path
-from pprint import pformat
 from typing import Any
 
 import gradio as gr
-import qrcode  # type: ignore[import-untyped]
-from PIL import Image
 
 from flashcard_generator.card import GeneratedCards
-from flashcard_generator.clean import clean_docs
-from flashcard_generator.export import ExportedCards, export_cards
-from flashcard_generator.extract import extract_docs
-from flashcard_generator.generate import DEFAULT_MODEL, generate_cards, list_model_names
-from flashcard_generator.prompt import build_prompt
-from flashcard_generator.share import CardShare
+from flashcard_generator.export import ExportedCards
+from flashcard_generator.generate import DEFAULT_MODEL, list_model_names
+from flashcard_generator.pipeline import PipelineStep, run_pipeline
+from flashcard_generator.share import CardShare, QRCode, get_lan_ip, make_qr
 
-type QrCode = Image.Image
-# TODO: Once stabilized, update to a type with named slots, for readability
-type ViewState = tuple[
+# TODO: Once stabilized, update to types with named slots, for readability
+type ScreenUpdate = tuple[
     gr.Column,
     gr.Column,
     gr.Column,
     gr.Column,
-    str,
-    str,
+]
+
+type GenerationUpdate = tuple[
+    *ScreenUpdate,
+    str,  # progress
+    str,  # rendered cards
     GeneratedCards | None,
     ExportedCards | None,
-    str,
-    QrCode | None,
 ]
+
+type ShareUpdate = tuple[
+    *ScreenUpdate,
+    str,
+    QRCode,
+]
+
+type ResetUpdate = tuple[
+    *GenerationUpdate,
+    str,  # share instructions
+    QRCode | None,
+]
+
 type GradioUpdate = dict[str, Any]
 
 card_share = CardShare()
@@ -50,14 +58,14 @@ CSS = """
 }
 """
 
-STEPS = (
-    "Files uploaded",
-    "Text extracted",
-    "Text cleaned",
-    "Prompt built",
-    "Cards generated",
-    "Downloads ready",
-)
+STEP_LABELS = {
+    PipelineStep.FILES_UPLOADED: "Files uploaded",
+    PipelineStep.TEXT_EXTRACTED: "Text extracted",
+    PipelineStep.TEXT_CLEANED: "Text cleaned",
+    PipelineStep.PROMPT_BUILT: "Prompt built",
+    PipelineStep.CARDS_GENERATED: "Cards generated",
+    PipelineStep.CARDS_EXPORTED: "Downloads ready",
+}
 
 STEPS_DELAY_SECONDS = 1  # To see the steps cascade in the UI
 
@@ -66,149 +74,97 @@ BIND_ADDRESS = "0.0.0.0"  # noqa: S104
 CARDS_ENDPOINT = "/gradio_api/api/cards"
 
 
-def render_progress(steps_completed: int) -> str:
+class Screen(Enum):
+    """App screens."""
+
+    UPLOAD = auto()
+    PROGRESS = auto()
+    RESULTS = auto()
+    SHARE = auto()
+
+
+def render_progress(completed_step: PipelineStep) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
 
-    for index, stage in enumerate(STEPS):
-        checkbox = "[x]" if index < steps_completed else "[ ]"
+    for step in PipelineStep:
+        checkbox = "[x]" if step <= completed_step else "[ ]"
 
-        lines.append(f"- {checkbox} {stage}")
+        lines.append(f"- {checkbox} {STEP_LABELS[step]}")
 
     return "\n".join(lines)
 
 
-def show_upload_view() -> ViewState:
-    """Show the file upload view."""
+def show_screen(screen: Screen) -> ScreenUpdate:
+    """Show the requested screen."""
     return (
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
+        gr.Column(visible=screen is Screen.UPLOAD),
+        gr.Column(visible=screen is Screen.PROGRESS),
+        gr.Column(visible=screen is Screen.RESULTS),
+        gr.Column(visible=screen is Screen.SHARE),
+    )
+
+
+def show_upload_screen() -> GenerationUpdate:
+    """Show the file upload screen."""
+    return (
+        *show_screen(Screen.UPLOAD),
         "",
         "",
         None,
-        None,
-        "",
         None,
     )
 
 
-def show_progress_view(progress: str) -> ViewState:
-    """Show the progress view with a pipeline progress indicator."""
-    # gr.skip() avoids this bug: github.com/gradio-app/gradio/issues/13494
+def show_progress_screen(progress: str) -> GenerationUpdate:
+    """Show the progress screen with a pipeline progress indicator."""
     return (
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.skip(),
-        gr.skip(),
+        *show_screen(Screen.PROGRESS),
         progress,
         gr.skip(),
         gr.skip(),
         gr.skip(),
-        gr.skip(),
-        gr.skip(),
     )
 
 
-def show_results_view(
+def show_results_screen(
     generated_cards: GeneratedCards | None,
     rendered_cards: str | None,
     export: ExportedCards,
-) -> ViewState:
+) -> GenerationUpdate:
     """Show the rendered cards and export options."""
     return (
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.skip(),
+        *show_screen(Screen.RESULTS),
         "",
         rendered_cards if rendered_cards is not None else "No cards generated.",
         generated_cards,
         export,
-        gr.skip(),
-        gr.skip(),
     )
 
 
-def show_share_view(share_url: str, share_qr: QrCode) -> ViewState:
-    """Show the view for sharing cards locally."""
+def show_share_screen(share_url: str, share_qr: QRCode) -> ShareUpdate:
+    """Show the card-sharing screen."""
     return (
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
+        *show_screen(Screen.SHARE),
         f"Card sharing endpoint: POST `{share_url}`",
         share_qr,
     )
 
 
-def exit_share_view() -> ViewState:
-    """Return to the results view after sharing."""
-    return (
-        gr.Column(visible=False),
-        gr.Column(visible=False),
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-        gr.skip(),
-    )
-
-
-def run_flow(gradio_paths: list[str], model: str) -> Generator[ViewState]:
-    """Run the Gradio flashcard generation flow."""
+def run_flow(gradio_paths: list[str], model: str) -> Generator[GenerationUpdate]:
+    """Run the pipeline and translate its events into Gradio updates."""
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     filepaths = [Path(gp) for gp in gradio_paths]
 
     try:
-        yield show_progress_view(render_progress(steps_completed=1))
+        for event in run_pipeline(filepaths, model):
+            if isinstance(event, PipelineStep):
+                yield show_progress_screen(render_progress(event))
+                time.sleep(STEPS_DELAY_SECONDS)
+                continue
 
-        time.sleep(STEPS_DELAY_SECONDS)
-        extraction = extract_docs(filepaths)
-        LOGGER.info(
-            "Extracted %s document(s); skipped %s file(s).",
-            len(extraction.docs),
-            len(extraction.rejected_paths),
-        )
-        LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
-        yield show_progress_view(render_progress(steps_completed=2))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        cleaned_docs = clean_docs(extraction.docs)
-        LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
-        LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
-        yield show_progress_view(render_progress(steps_completed=3))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        prompt = build_prompt(cleaned_docs)
-        LOGGER.info("Prompt built.")
-        LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
-        yield show_progress_view(render_progress(steps_completed=4))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        cards = generate_cards(prompt, model)
-        LOGGER.info("Generated %s card(s).", len(cards.cards))
-        LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
-        yield show_progress_view(render_progress(steps_completed=5))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
-        export = export_cards(cards, output_dir)
-        LOGGER.info("Exported card file(s): %s.", output_dir)
-        LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
-        yield show_progress_view(render_progress(steps_completed=6))
-
-        time.sleep(STEPS_DELAY_SECONDS)
-        rendered_cards = render_cards(cards)
-        yield show_results_view(cards, rendered_cards, export)
+            rendered_cards = render_cards(event.cards)
+            yield show_results_screen(event.cards, rendered_cards, event.export)
 
     except Exception as e:
         LOGGER.exception("There was an unexpected error while running the Gradio flow.")
@@ -217,7 +173,7 @@ def run_flow(gradio_paths: list[str], model: str) -> Generator[ViewState]:
             f"Error: {type(e).__name__}: {e}<br>"
             f"Please try again.",
         )
-        yield show_upload_view()
+        yield show_upload_screen()
 
 
 def render_cards(cards: GeneratedCards) -> str | None:
@@ -262,12 +218,12 @@ def cleanup_export(export: ExportedCards | None) -> None:
     shutil.rmtree(export.json_path.parent)
 
 
-def reset_app_state(export: ExportedCards | None) -> ViewState:
-    """Delete exported files and return to the upload view."""
+def reset_app_state(export: ExportedCards | None) -> ResetUpdate:
+    """Delete exported files and return to the upload screen."""
     cleanup_export(export)
     card_share.stop()
 
-    return show_upload_view()
+    return (*show_upload_screen(), "", None)
 
 
 def update_model_choices() -> GradioUpdate:
@@ -282,29 +238,33 @@ def update_model_choices() -> GradioUpdate:
     return gr.update(choices=choices, value=value)
 
 
-def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ViewState:
+def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ShareUpdate:
     """Start sharing the generated cards."""
     if cards is None or not cards.cards:
         gr.Warning("No cards to share.")
-        return exit_share_view()
+        return (
+            *show_screen(Screen.RESULTS),
+            gr.skip(),
+            gr.skip(),
+        )
+
+    url = get_share_url(request)
+    qr = make_qr(url)
 
     card_share.start(cards)
     LOGGER.info("Started sharing %s card(s).", len(cards.cards))
     LOGGER.debug("Shared card(s):\n%s", cards.model_dump_json(indent=2))
 
-    url = get_share_url(request)
-    qr = make_qr(url)
-
-    return show_share_view(url, qr)
+    return show_share_screen(url, qr)
 
 
-def stop_sharing() -> ViewState:
+def stop_sharing() -> ScreenUpdate:
     """Stop sharing the generated cards."""
     card_share.stop()
 
     LOGGER.info("Stopped sharing.")
 
-    return exit_share_view()
+    return show_screen(Screen.RESULTS)
 
 
 def get_shared_cards() -> dict[str, Any] | None:
@@ -320,18 +280,6 @@ def get_shared_cards() -> dict[str, Any] | None:
     return cards.model_dump()
 
 
-def get_lan_ip() -> str:
-    """Return this machine's LAN IP."""
-    try:
-        # Trick for cross-OS reliability: https://stackoverflow.com/a/166589
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            host: str = s.getsockname()[0]
-            return host
-    except OSError:
-        return "127.0.0.1"
-
-
 def get_share_url(request: gr.Request) -> str:
     """Return the URL exposing the shared cards on LAN."""
     host = get_lan_ip()
@@ -340,20 +288,13 @@ def get_share_url(request: gr.Request) -> str:
     return f"http://{host}:{port}{CARDS_ENDPOINT}"
 
 
-def make_qr(url: str) -> QrCode:
-    """Return a QR code that encodes the input URL."""
-    qr_code: QrCode = qrcode.make(url).get_image()
-
-    return qr_code
-
-
 def create_app() -> gr.Blocks:
     """Return an app instance."""
     app = gr.Blocks(title="Flashcard Generator")
     with app:
         gr.Markdown("# Flashcard Generator", elem_id="app-title")
 
-        with gr.Column(visible=True) as upload_view:
+        with gr.Column(visible=True) as upload_screen:
             files = gr.Files(
                 label="Learning materials: .txt .md .markdown .pdf",
                 file_types=[".txt", ".md", ".markdown", ".pdf"],
@@ -370,10 +311,10 @@ def create_app() -> gr.Blocks:
                 interactive=False,
             )
 
-        with gr.Column(visible=False) as progress_view:
-            progress_status = gr.Markdown()
+        with gr.Column(visible=False) as progress_screen:
+            progress_status = gr.Markdown(padding=True)
 
-        with gr.Column(visible=False) as results_view:
+        with gr.Column(visible=False) as results_screen:
             cards = gr.State()
             export = gr.State(delete_callback=cleanup_export)
 
@@ -400,7 +341,7 @@ def create_app() -> gr.Blocks:
                 components=[files, progress_status, rendered_cards],
             )
 
-        with gr.Column(visible=False) as share_view:
+        with gr.Column(visible=False) as share_screen:
             share_instructions = gr.Markdown()
             share_qr = gr.Image(show_label=False, buttons=[])
             stop_sharing_button = gr.Button(value="Stop Sharing")
@@ -425,15 +366,29 @@ def create_app() -> gr.Blocks:
             outputs=download_button,
         )
 
-        outputs = [
-            upload_view,
-            progress_view,
-            results_view,
-            share_view,
+        screen_outputs = [
+            upload_screen,
+            progress_screen,
+            results_screen,
+            share_screen,
+        ]
+
+        generation_outputs = [
+            *screen_outputs,
             progress_status,
             rendered_cards,
             cards,
             export,
+        ]
+
+        share_outputs = [
+            *screen_outputs,
+            share_instructions,
+            share_qr,
+        ]
+
+        reset_outputs = [
+            *generation_outputs,
             share_instructions,
             share_qr,
         ]
@@ -441,26 +396,26 @@ def create_app() -> gr.Blocks:
         generate_button.click(
             fn=run_flow,
             inputs=[files, model_dropdown],
-            outputs=outputs,
+            outputs=generation_outputs,
         )
 
         share_button.click(
             fn=start_sharing,
             inputs=cards,
-            outputs=outputs,
+            outputs=share_outputs,
             show_progress="hidden",
         )
 
         stop_sharing_button.click(
             fn=stop_sharing,
-            outputs=outputs,
+            outputs=screen_outputs,
             show_progress="hidden",
         )
 
         start_over_button.click(
             fn=reset_app_state,
             inputs=export,
-            outputs=outputs,
+            outputs=reset_outputs,
         )
 
     return app
@@ -479,7 +434,7 @@ def configure_logging() -> None:
 def main() -> None:
     """Launch the app."""
     configure_logging()
-    demo.launch(css=CSS, server_name=BIND_ADDRESS)
+    demo.launch(css=CSS, footer_links=[], server_name=BIND_ADDRESS)
 
 
 if __name__ == "__main__":
