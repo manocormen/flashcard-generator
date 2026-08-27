@@ -18,6 +18,24 @@ PANGRAM = (
 )
 
 
+def _write_pdf(path: Path, text: str, *, with_image: bool = False) -> None:
+    """Write a PDF with text and, optionally, an image."""
+    with pymupdf.open() as pdf:  # type: ignore[no-untyped-call]
+        page = pdf.new_page()
+        page.insert_text(point=(64, 64), text=text)
+
+        if with_image:
+            pixmap = pymupdf.Pixmap(  # type: ignore[no-untyped-call]
+                pymupdf.csRGB,
+                (0, 0, 200, 150),
+                False,  # noqa: FBT003
+            )
+            pixmap.clear_with(128)  # type: ignore[no-untyped-call]
+            page.insert_image((64, 97, 264, 247), pixmap=pixmap)
+
+        pdf.save(str(path))
+
+
 @pytest.mark.parametrize("extension", [".txt", ".md", ".markdown", ".MD"])
 def test_extract_docs_from_supported_text_file(tmp_path: Path, extension: str) -> None:
     """Test extracting docs from a single text file with a supported extension."""
@@ -32,15 +50,12 @@ def test_extract_docs_from_supported_text_file(tmp_path: Path, extension: str) -
 
 
 @pytest.mark.parametrize("extension", [".pdf", ".PDF"])
-def test_extract_docs_from_text_pdf_file(tmp_path: Path, extension: str) -> None:
-    """Test extracting a doc from a text-based PDF file."""
+def test_extract_docs_from_text_only_pdf_file(tmp_path: Path, extension: str) -> None:
+    """Test extracting a doc from a text-only PDF file."""
     pdf_path = tmp_path / f"example{extension}"
     images_root = tmp_path
     text = "Only review what you need, when you need it!"
-
-    with pymupdf.open() as pdf:  # type: ignore[no-untyped-call]
-        pdf.new_page().insert_text(point=(64, 64), text=text)
-        pdf.save(str(pdf_path))
+    _write_pdf(pdf_path, text)
 
     extraction = extract_docs([pdf_path], images_root)
 
@@ -50,6 +65,21 @@ def test_extract_docs_from_text_pdf_file(tmp_path: Path, extension: str) -> None
     doc = extraction.docs[0]
     assert doc.path == pdf_path
     assert text in doc.text
+
+
+def test_extract_docs_from_pdf_with_image(tmp_path: Path) -> None:
+    """Test extracting a doc from a PDF with both text and image."""
+    pdf_path = tmp_path / "example.pdf"
+    images_root = tmp_path
+    text = "Only review what you need, when you need it!"
+    _write_pdf(pdf_path, text, with_image=True)
+
+    extraction = extract_docs([pdf_path], images_root)
+
+    doc = extraction.docs[0]
+    assert text in doc.text
+    assert doc.images_dir is not None
+    assert len(list(doc.images_dir.iterdir())) == 1
 
 
 @pytest.mark.parametrize("extension", ["", ".unsupported"])
