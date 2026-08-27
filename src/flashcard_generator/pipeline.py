@@ -1,6 +1,7 @@
 """Flashcard-generation pipeline orchestration."""
 
 import logging
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,7 +69,11 @@ def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
     yield PipelineProgress(steps_completed=5)
 
     output_dir = Path(tempfile.mkdtemp(prefix="flashcard-generator-"))
-    export = export_cards(cards, output_dir)
+    try:
+        export = export_cards(cards, output_dir)
+    except Exception:
+        shutil.rmtree(output_dir, ignore_errors=True)  # Don't mask original error
+        raise
     LOGGER.info("Exported card file(s): %s.", output_dir)
     LOGGER.debug("Exported card file(s):\n%s", pformat(export, width=120))
     yield PipelineProgress(steps_completed=6)
