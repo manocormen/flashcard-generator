@@ -1,10 +1,11 @@
 """Build prompts for generating flashcards."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
     from flashcard_generator.extract import Doc
 
@@ -45,13 +46,17 @@ class Prompt:
 
     system: str
     user: str
+    images: list[Path] = field(default_factory=list)
 
 
 def build_prompt(docs: Iterable[Doc]) -> Prompt:
     """Build a prompt using the given docs."""
+    docs = tuple(docs)  # To be able to consume it twice below
+
     return Prompt(
         system=SYSTEM_PROMPT.strip(),
-        user=(f"{USER_PROMPT_PREFIX.strip()}\n\n{_render_docs(docs)}"),
+        user=f"{USER_PROMPT_PREFIX.strip()}\n\n{_render_docs(docs)}",
+        images=_gather_images(docs),
     )
 
 
@@ -68,3 +73,14 @@ def _render_doc(index: int, doc: Doc) -> str:
         f'<document index="{index}" filename="{doc.path.name}">\n'
         f"{doc.text}\n</document>"
     )
+
+
+def _gather_images(docs: Iterable[Doc]) -> list[Path]:
+    """Return image paths in document and filename order."""
+    image_paths = []
+
+    for doc in docs:
+        if doc.images_dir is not None:
+            image_paths.extend(sorted(doc.images_dir.iterdir()))
+
+    return image_paths
