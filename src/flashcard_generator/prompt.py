@@ -25,7 +25,8 @@ A good flashcard should be:
 - concise: front and back should be worded succinctly.
 - grounded: directly stem from the learning materials.
 
-And the deck as a whole should ensure good coverage: cover all important concepts.
+And the deck as a whole should ensure good coverage: cover all important concepts,
+including those conveyed by images.
 
 ## Format
 
@@ -36,7 +37,8 @@ each item represents a card with two keys: `front` and `back`.
 USER_PROMPT_PREFIX = """
 ## Learning Materials
 
-The JSON flashcards should be strictly based on the following learning materials:
+The JSON flashcards should be strictly based on the following learning materials,
+including any attached images:
 """
 
 
