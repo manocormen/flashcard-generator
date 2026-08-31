@@ -1,6 +1,7 @@
 """Test card generation."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +13,8 @@ from flashcard_generator.prompt import Prompt
 
 def test_generate_cards_args_and_return(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test generating cards with Ollama with structured outputs."""
-    prompt = Prompt(system="system", user="user")
+    images = [Path("image1.png"), Path("image2.png")]
+    prompt = Prompt(system="system", user="user", images=images)
     cards_json = json.dumps({"cards": [{"front": "front", "back": "back"}]})
 
     args = []
@@ -30,7 +32,7 @@ def test_generate_cards_args_and_return(monkeypatch: pytest.MonkeyPatch) -> None
             "model": "model",
             "messages": [
                 {"role": "system", "content": "system"},
-                {"role": "user", "content": "user"},
+                {"role": "user", "content": "user", "images": images},
             ],
             "format": build_cards_json_schema(),
             "options": {"temperature": 0},
