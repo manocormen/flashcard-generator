@@ -55,7 +55,7 @@ def test_pipeline_preserves_images_until_generation(
     try:
         for expected_step in (
             PipelineStep.FILES_UPLOADED,
-            PipelineStep.TEXT_EXTRACTED,
+            PipelineStep.CONTENT_EXTRACTED,
             PipelineStep.TEXT_CLEANED,
             PipelineStep.PROMPT_BUILT,
             PipelineStep.CARDS_GENERATED,

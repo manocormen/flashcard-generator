@@ -29,7 +29,7 @@ CSS = """
 
 STEP_LABELS = {
     PipelineStep.FILES_UPLOADED: "Files uploaded",
-    PipelineStep.TEXT_EXTRACTED: "Text extracted",
+    PipelineStep.CONTENT_EXTRACTED: "Content extracted",
     PipelineStep.TEXT_CLEANED: "Text cleaned",
     PipelineStep.PROMPT_BUILT: "Prompt built",
     PipelineStep.CARDS_GENERATED: "Cards generated",

@@ -29,7 +29,7 @@ class PipelineStep(IntEnum):
     """Pipeline steps in execution order."""
 
     FILES_UPLOADED = auto()
-    TEXT_EXTRACTED = auto()
+    CONTENT_EXTRACTED = auto()
     TEXT_CLEANED = auto()
     PROMPT_BUILT = auto()
     CARDS_GENERATED = auto()
@@ -61,7 +61,7 @@ def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
             len(extraction.rejected_paths),
         )
         LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
-        yield PipelineStep.TEXT_EXTRACTED
+        yield PipelineStep.CONTENT_EXTRACTED
 
         cleaned_docs = clean_docs(extraction.docs)
         LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
