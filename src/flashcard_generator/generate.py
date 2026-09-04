@@ -22,7 +22,7 @@ def generate_cards(prompt: Prompt, model: str = DEFAULT_MODEL) -> GeneratedCards
         model=model,
         messages=[
             {"role": "system", "content": prompt.system},
-            {"role": "user", "content": prompt.user},
+            {"role": "user", "content": prompt.user, "images": prompt.images},
         ],
         format=build_cards_json_schema(),
         # Low temperatures are recommended for structured outputs:

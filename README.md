@@ -40,6 +40,7 @@ For now, the app has the following constraints:
 
 - Supports only UTF-8-encoded text and Markdown files.
 - Supports only PDFs with highlightable text, not scanned PDFs.
+- PDFs with images require a vision-capable model, such as `gemma4`.
 - Requires the companion Android app for pushing cards to AnkiDroid. 
 - Generated flashcards in Q&A format only, i.e. [basic notes](https://docs.ankiweb.net/getting-started.html#note-types).
 

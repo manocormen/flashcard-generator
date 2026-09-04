@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
     from flashcard_generator.card import GeneratedCards
 
+IMAGES_TMP_DIR_PREFIX = "flashcard-generator-images-"
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -27,7 +29,7 @@ class PipelineStep(IntEnum):
     """Pipeline steps in execution order."""
 
     FILES_UPLOADED = auto()
-    TEXT_EXTRACTED = auto()
+    CONTENT_EXTRACTED = auto()
     TEXT_CLEANED = auto()
     PROMPT_BUILT = auto()
     CARDS_GENERATED = auto()
@@ -49,26 +51,29 @@ def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
     """Run the flashcard-generation pipeline."""
     yield PipelineStep.FILES_UPLOADED
 
-    extraction = extract_docs(paths)
-    LOGGER.info(
-        "Extracted %s document(s); skipped %s file(s).",
-        len(extraction.docs),
-        len(extraction.rejected_paths),
-    )
-    LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
-    yield PipelineStep.TEXT_EXTRACTED
+    with tempfile.TemporaryDirectory(prefix=IMAGES_TMP_DIR_PREFIX) as tmp_dir:
+        images_root = Path(tmp_dir)
 
-    cleaned_docs = clean_docs(extraction.docs)
-    LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
-    LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
-    yield PipelineStep.TEXT_CLEANED
+        extraction = extract_docs(paths, images_root)
+        LOGGER.info(
+            "Extracted %s document(s); skipped %s file(s).",
+            len(extraction.docs),
+            len(extraction.rejected_paths),
+        )
+        LOGGER.debug("Extraction result:\n%s", pformat(extraction, width=120))
+        yield PipelineStep.CONTENT_EXTRACTED
 
-    prompt = build_prompt(cleaned_docs)
-    LOGGER.info("Prompt built.")
-    LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
-    yield PipelineStep.PROMPT_BUILT
+        cleaned_docs = clean_docs(extraction.docs)
+        LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
+        LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
+        yield PipelineStep.TEXT_CLEANED
 
-    cards = generate_cards(prompt, model)
+        prompt = build_prompt(cleaned_docs)
+        LOGGER.info("Prompt built.")
+        LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
+        yield PipelineStep.PROMPT_BUILT
+
+        cards = generate_cards(prompt, model)
     LOGGER.info("Generated %s card(s).", len(cards.cards))
     LOGGER.debug("Generated card(s):\n%s", cards.model_dump_json(indent=2))
     yield PipelineStep.CARDS_GENERATED
