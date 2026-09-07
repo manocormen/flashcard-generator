@@ -32,3 +32,14 @@ def test_clean_docs_preserves_non_ascii_text() -> None:
     cleaned_docs = clean_docs([Doc(path=path, text=PANGRAM)])
 
     assert cleaned_docs == [Doc(path=path, text=PANGRAM)]
+
+
+def test_clean_docs_preserves_pdf_image_references() -> None:
+    """Test that cleaning preserves a PDF image link and directory."""
+    path = Path("example.pdf")
+    images_dir = Path("images")
+    text = PANGRAM + "\n\n![](cats.pdf-0001-03.png)\n\n" + PANGRAM
+
+    cleaned_docs = clean_docs([Doc(path=path, text=text, images_dir=images_dir)])
+
+    assert cleaned_docs == [Doc(path=path, text=text, images_dir=images_dir)]

@@ -1,4 +1,4 @@
-"""Extract text from uploaded files."""
+"""Extract text and images from uploaded files."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -24,10 +24,11 @@ class RejectionReason(StrEnum):
 
 @dataclass(kw_only=True)
 class Doc:
-    """Extracted text document."""
+    """Extracted document."""
 
     path: Path
     text: str
+    images_dir: Path | None = None
 
 
 @dataclass(kw_only=True)
@@ -46,12 +47,13 @@ class ExtractionResult:
     rejected_paths: list[RejectedPath]
 
 
-def extract_docs(paths: Iterable[Path]) -> ExtractionResult:
-    """Extract documents from paths."""
+def extract_docs(paths: Iterable[Path], images_root: Path) -> ExtractionResult:
+    """Extract documents from paths, placing images under given root."""
     docs, rejected_paths = [], []
 
-    for path in paths:
-        outcome = _extract_doc(path)
+    for index, path in enumerate(paths):
+        images_dir = images_root / f"doc-{index:03d}"
+        outcome = _extract_doc(path, images_dir)
         if isinstance(outcome, Doc):
             docs.append(outcome)
         else:
@@ -60,14 +62,14 @@ def extract_docs(paths: Iterable[Path]) -> ExtractionResult:
     return ExtractionResult(docs=docs, rejected_paths=rejected_paths)
 
 
-def _extract_doc(path: Path) -> Doc | RejectedPath:
+def _extract_doc(path: Path, images_dir: Path) -> Doc | RejectedPath:
     """Extract document from path."""
     extension = path.suffix.lower()
 
     if extension in SUPPORTED_TEXT_EXTENSIONS:
         return _extract_doc_from_text(path)
     if extension == PDF_EXTENSION:
-        return _extract_doc_from_pdf(path)
+        return _extract_doc_from_pdf(path, images_dir)
 
     return RejectedPath(path=path, reason=RejectionReason.UNSUPPORTED_EXTENSION)
 
@@ -84,11 +86,17 @@ def _extract_doc_from_text(path: Path) -> Doc | RejectedPath:
     return Doc(path=path, text=text)
 
 
-def _extract_doc_from_pdf(path: Path) -> Doc | RejectedPath:
-    """Extract document from text-based PDF file."""
+def _extract_doc_from_pdf(path: Path, images_dir: Path) -> Doc | RejectedPath:
+    """Extract document from PDF file."""
     try:
-        text = pymupdf4llm.to_markdown(str(path), use_ocr=False)
+        images_dir.mkdir()
+        text = pymupdf4llm.to_markdown(
+            str(path),
+            use_ocr=False,
+            write_images=True,
+            image_path=str(images_dir),
+        )
     except OSError, RuntimeError:
         return RejectedPath(path=path, reason=RejectionReason.READ_FAILED)
 
-    return Doc(path=path, text=text)
+    return Doc(path=path, text=text, images_dir=images_dir)
