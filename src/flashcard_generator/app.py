@@ -185,7 +185,16 @@ def start_sharing(cards: GeneratedCards | None, request: gr.Request) -> ScreenUp
         gr.Warning("No cards to share.")
         return show_screen(results_screen)
 
-    url = get_share_url(request)
+    try:
+        url = get_share_url(request)
+    except OSError, RuntimeError:
+        LOGGER.warning("Couldn't discover an appropriate LAN address.", exc_info=True)
+        gr.Warning(
+            "Couldn't find an appropriate LAN address. Connect both devices "
+            "to the same LAN and try again, or download your cards instead.",
+        )
+        return show_screen(results_screen)
+
     qr = make_qr(url)
 
     card_share.start(cards)
