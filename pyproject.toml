@@ -11,6 +11,7 @@ dependencies = [
     "ftfy>=6.3.1",
     "gradio>=6.25.0",
     "ollama>=0.6.2",
+    "psutil>=7.2.2",
     "pydantic>=2.13.4",
     "pymupdf4llm>=1.27.2.3",
     "qrcode[pil]>=8.2",
