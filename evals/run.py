@@ -1,5 +1,6 @@
 """Evaluate generated cards."""
 
+import re
 from dataclasses import dataclass
 from pprint import pprint
 
@@ -45,12 +46,21 @@ def _normalize(text: str) -> str:
     return " " + " ".join(WORD_TOKENIZER_STEMMER.tokenize(text)) + " "
 
 
-def _includes(fields: list[str], term: str) -> bool:
-    """Check if given term shows in at least one field."""
-    # Term may comprise slash-separated coterms. All should be present.
-    coterms = [_normalize(coterm) for coterm in term.split("/")]
+def _includes(fields: list[str], entry: str) -> bool:
+    """Check if the given glossary entry shows in at least one field."""
+    pattern = r"(.+?)\s+\(([A-Z][A-Z0-9]*)\)"  # words + acronym: e.g. Common Era (CE)
 
-    return all(any(coterm in f for f in fields) for coterm in coterms)
+    # Entries may comprise slash-separated coterms. All must be present.
+    for coterm in map(str.strip, entry.split("/")):
+        # Coterms may comprise acronym alternatives. Either must be present.
+        match_ = re.fullmatch(pattern, coterm)
+        alts = match_.groups() if match_ else (coterm,)
+        norm = [_normalize(alt) for alt in alts]
+
+        if not any(alt in f for alt in norm for f in fields):
+            return False
+
+    return True
 
 
 def main() -> None:
@@ -58,7 +68,7 @@ def main() -> None:
     # TODO: Remove toy example, once I wired the actual eval PDFs.
     reference = Reference(
         abstract="Frogs hatch from eggs. Tadpoles grow legs and become adult frogs.",
-        glossary_terms=["Eggs/Tadpoles", "Adult frogs"],
+        glossary_terms=["Eggs/Tadpoles (TP)", "Adult frogs"],
     )
 
     cards = GeneratedCards(
