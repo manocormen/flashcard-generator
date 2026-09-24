@@ -1,6 +1,7 @@
 """Evaluate generated cards."""
 
 from dataclasses import dataclass
+from pprint import pprint
 
 from rouge_score import rouge_scorer, tokenizers  # type: ignore[import-untyped]
 
@@ -27,7 +28,7 @@ def score_cards(cards: GeneratedCards, reference: Reference) -> dict[str, object
     rouge1 = ROUGE.score(abstract, card_text)["rouge1"]
 
     fields = [_normalize(f) for c in cards.cards for f in (c.front, c.back)]
-    matches = [t for t in glossary if any(_normalize(t) in f for f in fields)]
+    matches = [term for term in glossary if _includes(fields, term)]
 
     return {
         "abstract_recall": rouge1.recall,
@@ -44,12 +45,20 @@ def _normalize(text: str) -> str:
     return " " + " ".join(WORD_TOKENIZER_STEMMER.tokenize(text)) + " "
 
 
+def _includes(fields: list[str], term: str) -> bool:
+    """Check if given term shows in at least one field."""
+    # Term may comprise slash-separated coterms. All should be present.
+    coterms = [_normalize(coterm) for coterm in term.split("/")]
+
+    return all(any(coterm in f for f in fields) for coterm in coterms)
+
+
 def main() -> None:
     """Run the evaluations."""
     # TODO: Remove toy example, once I wired the actual eval PDFs.
     reference = Reference(
         abstract="Frogs hatch from eggs. Tadpoles grow legs and become adult frogs.",
-        glossary_terms=["Eggs", "Tadpoles", "Adult frogs"],
+        glossary_terms=["Eggs/Tadpoles", "Adult frogs"],
     )
 
     cards = GeneratedCards(
@@ -60,7 +69,7 @@ def main() -> None:
     )
 
     scores = score_cards(cards, reference)
-    print(scores)  # noqa: T201
+    pprint(scores)  # noqa: T203
 
 
 if __name__ == "__main__":
