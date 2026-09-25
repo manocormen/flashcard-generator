@@ -1,12 +1,23 @@
 """Evaluate generated cards."""
 
+import json
 import re
+import shutil
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from pprint import pprint
+from typing import TYPE_CHECKING
 
 from rouge_score import rouge_scorer, tokenizers  # type: ignore[import-untyped]
 
-from flashcard_generator.card import BasicCard, GeneratedCards
+from flashcard_generator.generate import DEFAULT_MODEL
+from flashcard_generator.pipeline import PipelineResult, run_pipeline
+
+if TYPE_CHECKING:
+    from flashcard_generator.card import GeneratedCards
+
+EVALS_DIR = Path("evals")
 
 ROUGE = rouge_scorer.RougeScorer(["rouge1"], use_stemmer=True)
 WORD_TOKENIZER = tokenizers.DefaultTokenizer()
@@ -65,21 +76,27 @@ def _includes(fields: list[str], entry: str) -> bool:
 
 def main() -> None:
     """Run the evaluations."""
-    # TODO: Remove toy example, once I wired the actual eval PDFs.
-    reference = Reference(
-        abstract="Frogs hatch from eggs. Tadpoles grow legs and become adult frogs.",
-        glossary_terms=["Eggs/Tadpoles (TP)", "Adult frogs"],
-    )
+    started = datetime.now(UTC)
+    output = EVALS_DIR / "runs" / started.strftime("%Y%m%dT%H%M%S.%fZ")
+    output.mkdir(parents=True)
 
-    cards = GeneratedCards(
-        cards=[
-            BasicCard(front="What hatches from eggs?", back="Tadpoles."),
-            BasicCard(front="What do tadpoles grow?", back="Legs."),
-        ],
-    )
+    pdf = EVALS_DIR / "data" / "sjk" / "mayan-droughts_article.pdf"
+    reference_path = pdf.with_suffix(".json")
+    reference_data = json.loads(reference_path.read_text(encoding="utf-8"))
+    reference = Reference(**reference_data)
 
-    scores = score_cards(cards, reference)
-    pprint(scores)  # noqa: T203
+    print(f"Evaluating {pdf.name}...")  # noqa: T201
+    for event in run_pipeline([pdf], DEFAULT_MODEL):
+        if isinstance(event, PipelineResult):
+            scores = score_cards(event.cards, reference)
+
+            scores_json = json.dumps(scores, indent=2)
+            (output / "results.json").write_text(scores_json, encoding="utf-8")
+
+            shutil.move(event.export.json_path.parent, output / pdf.stem)
+
+            pprint(scores)  # noqa: T203
+            print(f"Scores saved in: {output}")  # noqa: T201
 
 
 if __name__ == "__main__":
