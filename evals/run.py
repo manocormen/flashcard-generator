@@ -1,5 +1,6 @@
 """Evaluate generated cards."""
 
+import argparse
 import json
 import re
 import shutil
@@ -76,20 +77,33 @@ def _includes(fields: list[str], entry: str) -> bool:
 
 def main() -> None:
     """Run the evaluations."""
+    parser = argparse.ArgumentParser(description="Evaluate generated cards.")
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="Ollama model to use.",
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=EVALS_DIR / "data" / "sjk",
+        help="Directory with article PDFs and their JSON references.",
+    )
+    args = parser.parse_args()
+
     started = datetime.now(UTC)
     output = EVALS_DIR / "runs" / started.strftime("%Y%m%dT%H%M%S.%fZ")
     output.mkdir(parents=True)
 
-    data_dir = EVALS_DIR / "data" / "sjk"
     all_scores: dict[str, dict[str, object]] = {}
 
-    for pdf in sorted(data_dir.glob("*.pdf")):
+    for pdf in sorted(args.data_dir.glob("*.pdf")):
         reference_path = pdf.with_suffix(".json")
         reference_data = json.loads(reference_path.read_text(encoding="utf-8"))
         reference = Reference(**reference_data)
 
         print(f"Evaluating {pdf.name}...")  # noqa: T201
-        for event in run_pipeline([pdf], DEFAULT_MODEL):
+        for event in run_pipeline([pdf], args.model):
             if isinstance(event, PipelineResult):
                 all_scores[pdf.stem] = score_cards(event.cards, reference)
                 shutil.move(event.export.json_path.parent, output / pdf.stem)
