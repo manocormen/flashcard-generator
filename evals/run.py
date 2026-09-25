@@ -80,23 +80,25 @@ def main() -> None:
     output = EVALS_DIR / "runs" / started.strftime("%Y%m%dT%H%M%S.%fZ")
     output.mkdir(parents=True)
 
-    pdf = EVALS_DIR / "data" / "sjk" / "mayan-droughts_article.pdf"
-    reference_path = pdf.with_suffix(".json")
-    reference_data = json.loads(reference_path.read_text(encoding="utf-8"))
-    reference = Reference(**reference_data)
+    data_dir = EVALS_DIR / "data" / "sjk"
+    all_scores: dict[str, dict[str, object]] = {}
 
-    print(f"Evaluating {pdf.name}...")  # noqa: T201
-    for event in run_pipeline([pdf], DEFAULT_MODEL):
-        if isinstance(event, PipelineResult):
-            scores = score_cards(event.cards, reference)
+    for pdf in sorted(data_dir.glob("*.pdf")):
+        reference_path = pdf.with_suffix(".json")
+        reference_data = json.loads(reference_path.read_text(encoding="utf-8"))
+        reference = Reference(**reference_data)
 
-            scores_json = json.dumps(scores, indent=2)
-            (output / "results.json").write_text(scores_json, encoding="utf-8")
+        print(f"Evaluating {pdf.name}...")  # noqa: T201
+        for event in run_pipeline([pdf], DEFAULT_MODEL):
+            if isinstance(event, PipelineResult):
+                all_scores[pdf.stem] = score_cards(event.cards, reference)
+                shutil.move(event.export.json_path.parent, output / pdf.stem)
 
-            shutil.move(event.export.json_path.parent, output / pdf.stem)
+    scores_json = json.dumps(all_scores, indent=2)
+    (output / "results.json").write_text(scores_json, encoding="utf-8")
 
-            pprint(scores)  # noqa: T203
-            print(f"Scores saved in: {output}")  # noqa: T201
+    pprint(all_scores)  # noqa: T203
+    print(f"Scores saved in: {output}")  # noqa: T201
 
 
 if __name__ == "__main__":
