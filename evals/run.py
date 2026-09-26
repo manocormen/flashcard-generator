@@ -4,10 +4,12 @@ import argparse
 import json
 import re
 import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from pprint import pprint
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from rouge_score import rouge_scorer, tokenizers  # type: ignore[import-untyped]
@@ -92,6 +94,30 @@ def main() -> None:
     args = parser.parse_args()
 
     started = datetime.now(UTC)
+    timer = perf_counter()
+
+    git_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],  # noqa: S607
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    git_status = subprocess.run(
+        [  # noqa: S607
+            "git",
+            "status",
+            "--porcelain",
+            "--",  # Only monitor paths that may impact generation and thereby evals
+            "src",
+            "evals",
+            "pyproject.toml",
+            "uv.lock",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    ).stdout
+
     output = EVALS_DIR / "runs" / started.strftime("%Y%m%dT%H%M%S.%fZ")
     output.mkdir(parents=True)
 
@@ -110,6 +136,17 @@ def main() -> None:
 
     scores_json = json.dumps(all_scores, indent=2)
     (output / "results.json").write_text(scores_json, encoding="utf-8")
+
+    metadata = {
+        "started_at": started.isoformat(),
+        "duration_seconds": perf_counter() - timer,
+        "model": args.model,
+        "data_dir": str(args.data_dir),
+        "git_commit": git_commit,
+        "git_dirty": bool(git_status),
+    }
+    metadata_json = json.dumps(metadata, indent=2)
+    (output / "metadata.json").write_text(metadata_json, encoding="utf-8")
 
     pprint(all_scores)  # noqa: T203
     print(f"Scores saved in: {output}")  # noqa: T201
