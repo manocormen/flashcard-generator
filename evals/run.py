@@ -62,12 +62,12 @@ def _normalize(text: str) -> str:
 
 def _includes(fields: list[str], entry: str) -> bool:
     """Check if the given glossary entry shows in at least one field."""
-    pattern = r"(.+?)\s+\(([A-Z][A-Z0-9]*)\)"  # words + acronym: e.g. Common Era (CE)
+    pattern = r"(.+?)\s+\(([A-Z][A-Z0-9]*)\)"  # words + abbreviation
 
     # Entries may comprise slash-separated coterms. All must be present.
     for coterm in map(str.strip, entry.split("/")):
-        # Coterms may comprise acronym alternatives. Either must be present.
-        match_ = re.fullmatch(pattern, coterm)
+        # Coterms may comprise abbreviation alternatives. Either must be present.
+        match_ = re.fullmatch(pattern, coterm, flags=re.IGNORECASE)
         alts = match_.groups() if match_ else (coterm,)
         norm = [_normalize(alt) for alt in alts]
 
