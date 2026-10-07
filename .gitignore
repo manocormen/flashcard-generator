@@ -219,3 +219,9 @@ __marimo__/
 
 # Gradio
 .gradio/
+
+# macOS
+.DS_Store
+
+# Evaluation results
+/evals/runs/
