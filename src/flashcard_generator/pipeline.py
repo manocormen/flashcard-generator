@@ -47,7 +47,11 @@ class PipelineResult:
 type PipelineEvent = PipelineStep | PipelineResult
 
 
-def run_pipeline(paths: list[Path], model: str) -> Generator[PipelineEvent]:
+def run_pipeline(
+    paths: list[Path],
+    model: str,
+    topic: str = "",  # noqa: ARG001 - TODO: Remove noqa once topic is used
+) -> Generator[PipelineEvent]:
     """Run the flashcard-generation pipeline."""
     yield PipelineStep.FILES_UPLOADED
 
