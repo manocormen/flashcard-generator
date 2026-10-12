@@ -121,13 +121,18 @@ def update_model_choices() -> gr.Dropdown:
     return gr.Dropdown(choices=choices, value=value)
 
 
-def run_generation(gradio_paths: list[str], model: str) -> Generator[ScreenUpdate]:
+def run_generation(
+    gradio_paths: list[str],
+    model: str,
+    topic: str = "",
+) -> Generator[ScreenUpdate]:
     """Run card generation and translate pipeline events into Gradio updates."""
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     paths = [Path(path) for path in gradio_paths]
+    topic = topic.strip()
 
     try:
-        for event in run_pipeline(paths, model):
+        for event in run_pipeline(paths, model, topic):
             if isinstance(event, PipelineStep):
                 yield show_progress_screen(render_progress(event))
                 time.sleep(STEP_DELAY_SECONDS)
@@ -233,6 +238,10 @@ with gr.Blocks(title="Flashcard Generator") as demo:
             label="Learning materials: .txt .md .markdown .pdf",
             file_types=[".txt", ".md", ".markdown", ".pdf"],
         )
+        topic_input = gr.Textbox(
+            label="Topic (Optional)",
+            info="Leave blank to generate cards from all uploaded materials.",
+        )
         model_dropdown = gr.Dropdown(
             label="Model",
             choices=[DEFAULT_MODEL],
@@ -318,7 +327,7 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
     generate_button.click(
         fn=run_generation,
-        inputs=[files_input, model_dropdown],
+        inputs=[files_input, model_dropdown, topic_input],
         outputs=GENERATION_OUTPUTS,
     )
 

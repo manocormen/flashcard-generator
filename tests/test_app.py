@@ -15,7 +15,7 @@ def test_run_generation_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that errors during card generation are logged and shown."""
     message = "Error during document extraction."
 
-    def raise_error(_paths: object, _model: str) -> None:
+    def raise_error(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError(message)
 
     logs: list[str] = []
