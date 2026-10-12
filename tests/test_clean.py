@@ -43,3 +43,19 @@ def test_clean_docs_preserves_pdf_image_references() -> None:
     cleaned_docs = clean_docs([Doc(path=path, text=text, images_dir=images_dir)])
 
     assert cleaned_docs == [Doc(path=path, text=text, images_dir=images_dir)]
+
+
+def test_clean_docs_normalizes_image_references() -> None:
+    """Test that cleaning normalizes temporary image references."""
+    path = Path("example.pdf")
+    images_dir = Path("images")
+
+    image_ref = "![](/tmp/flashcard-generator-images-random123/doc-000/figure.png)"
+    image_ref_clean = "![](images/doc-000/figure.png)"
+
+    text = PANGRAM + "\n\n" + image_ref + "\n\n" + PANGRAM
+    text_clean = PANGRAM + "\n\n" + image_ref_clean + "\n\n" + PANGRAM
+
+    cleaned_docs = clean_docs([Doc(path=path, text=text, images_dir=images_dir)])
+
+    assert cleaned_docs == [Doc(path=path, text=text_clean, images_dir=images_dir)]

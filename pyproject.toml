@@ -31,6 +31,7 @@ dev = [
     "mypy>=2.1.0",
     "pre-commit>=4.6.0",
     "pytest>=9.0.3",
+    "rouge-score>=0.1.2",
     "ruff>=0.15.13",
     "rust-just>=1.51.0",
 ]

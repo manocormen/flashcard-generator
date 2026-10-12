@@ -13,6 +13,12 @@ run:
 dev:
     FLASHCARD_GENERATOR_LOG_LEVEL="DEBUG" uv run gradio src/flashcard_generator/app.py
 
+# Run evaluations
+[group("Evaluations")]
+[positional-arguments]
+eval *args:
+    uv run python -m evals.run "$@"
+
 # Fix formatting
 [group("Mutating QA")]
 format:

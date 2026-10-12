@@ -1,0 +1,16 @@
+{
+  "abstract": "It is important for animals to move around easily. It helps them avoid predators or catch a meal. But the ways animals move depend on the environment they live in. A lot of animals that live in water beat their legs one after another. It is called metachronal swimming. And it is really efficient at propelling animals through the water. We wanted to investigate the other half of the story. Is metachronal swimming also good at reducing drag?\n\nWe performed experiments on grass shrimp to look at metachronal swimming. We looked at leg flexibility, the patterns of leg movement, and how the water moved around the legs. Then we built a robotic model to measure water flow and force data at the same time. We found that leg flexibility reduced drag up to 75% compared to stiff legs. We also saw that there was less drag when legs grouped together. It caused fewer interactions with wakes from other legs. Hopefully, this information can help us build more efficient underwater vehicles in the future.",
+  "glossary_terms": [
+    "3D printing",
+    "Comb jellies",
+    "Copepods",
+    "Drag",
+    "Evolution",
+    "Metachronal swimming",
+    "Power stroke",
+    "Recovery stroke",
+    "Thrust",
+    "Vortex",
+    "Wake"
+  ]
+}
