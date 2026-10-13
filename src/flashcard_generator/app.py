@@ -170,6 +170,7 @@ def reset_app_state(export: ExportedCards | None) -> ScreenUpdate:
 
     return show_upload_screen() | {
         files_input: None,
+        topic_input: "",
         share_instructions: "",
         share_qr_image: None,
     }
@@ -305,6 +306,7 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
     RESET_OUTPUTS = [
         files_input,
+        topic_input,
         *GENERATION_OUTPUTS,
         share_instructions,
         share_qr_image,
