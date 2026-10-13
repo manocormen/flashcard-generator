@@ -9,7 +9,7 @@ from pathlib import Path
 from pprint import pformat
 from typing import TYPE_CHECKING
 
-from flashcard_generator.clean import clean_docs
+from flashcard_generator.clean import clean_docs, clean_text
 from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import generate_cards
@@ -50,7 +50,7 @@ type PipelineEvent = PipelineStep | PipelineResult
 def run_pipeline(
     paths: list[Path],
     model: str,
-    topic: str = "",  # noqa: ARG001 - TODO: Remove noqa once topic is used
+    topic: str = "",
 ) -> Generator[PipelineEvent]:
     """Run the flashcard-generation pipeline."""
     yield PipelineStep.FILES_UPLOADED
@@ -68,6 +68,7 @@ def run_pipeline(
         yield PipelineStep.CONTENT_EXTRACTED
 
         cleaned_docs = clean_docs(extraction.docs)
+        topic = clean_text(topic)
         LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
         LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
         yield PipelineStep.TEXT_CLEANED
