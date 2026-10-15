@@ -1,6 +1,7 @@
 """Chunk documents for embedding."""
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from langchain_text_splitters import (
@@ -10,6 +11,7 @@ from langchain_text_splitters import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
     from flashcard_generator.extract import Doc
 
@@ -30,6 +32,7 @@ class Chunk:
     text: str
     headings: dict[str, str]
     index: int
+    images: list[Path] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
@@ -51,8 +54,24 @@ def _chunk_doc(doc: Doc) -> ChunkedDoc:
     fragments = _TEXT_SPLITTER.split_documents(sections)
 
     chunks = [
-        Chunk(text=fragment.page_content, headings=fragment.metadata, index=index)
+        Chunk(
+            text=fragment.page_content,
+            headings=fragment.metadata,
+            index=index,
+            images=_gather_images(fragment.page_content, doc.images_dir),
+        )
         for index, fragment in enumerate(fragments)
     ]
 
     return ChunkedDoc(doc=doc, chunks=chunks)
+
+
+def _gather_images(text: str, images_dir: Path | None) -> list[Path]:
+    """Return paths of images referenced in text."""
+    if images_dir is None:
+        return []
+
+    pattern = rf"!\[\]\(images/{images_dir.name}/([^\n)]+)\)"
+    image_paths = re.findall(pattern, text)
+
+    return [images_dir / image_path for image_path in image_paths]
