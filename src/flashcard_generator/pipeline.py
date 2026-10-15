@@ -9,6 +9,7 @@ from pathlib import Path
 from pprint import pformat
 from typing import TYPE_CHECKING
 
+from flashcard_generator.chunk import chunk_docs
 from flashcard_generator.clean import clean_docs, clean_text
 from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
@@ -72,6 +73,15 @@ def run_pipeline(
         LOGGER.info("Cleaned %s document(s).", len(cleaned_docs))
         LOGGER.debug("Cleaned document(s):\n%s", pformat(cleaned_docs, width=120))
         yield PipelineStep.TEXT_CLEANED
+
+        if topic:
+            chunked_docs = chunk_docs(cleaned_docs)
+            LOGGER.info(
+                "Chunked %s document(s) into %s chunks.",
+                len(chunked_docs),
+                sum(len(doc.chunks) for doc in chunked_docs),
+            )
+            LOGGER.debug("Chunked document(s):\n%s", pformat(chunked_docs, width=120))
 
         prompt = build_prompt(cleaned_docs)
         LOGGER.info("Prompt built.")
