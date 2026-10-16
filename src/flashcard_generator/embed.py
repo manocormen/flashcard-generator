@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
+
     from flashcard_generator.chunk import Chunk
     from flashcard_generator.extract import Doc
 
@@ -30,3 +32,20 @@ class EmbeddingResult:
 
     topic_vector: list[float]
     docs: list[EmbeddedDoc]
+
+
+def _load_model() -> SentenceTransformer:
+    """Load embedding model."""
+    from sentence_transformers import SentenceTransformer  # noqa: PLC0415 - lazy import
+
+    return SentenceTransformer(
+        "google/embeddinggemma-2",
+        config_kwargs={"audio_config": None},  # Load only text and image capabilities
+    )
+
+
+def _embed_topic(topic: str, model: SentenceTransformer) -> list[float]:
+    """Encode the topic into a query embedding."""
+    vector = model.encode_query(topic, normalize_embeddings=True)
+
+    return [float(value) for value in vector]
