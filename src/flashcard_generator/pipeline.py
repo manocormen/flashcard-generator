@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from flashcard_generator.chunk import chunk_docs
 from flashcard_generator.clean import clean_docs, clean_text
+from flashcard_generator.embed import embed_docs
 from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import generate_cards
@@ -82,6 +83,14 @@ def run_pipeline(
                 sum(len(doc.chunks) for doc in chunked_docs),
             )
             LOGGER.debug("Chunked document(s):\n%s", pformat(chunked_docs, width=120))
+
+            embedding_result = embed_docs(chunked_docs, topic)
+            LOGGER.info(
+                "Embedded topic and %s document(s) (%s chunks) into %sD vectors.",
+                len(embedding_result.docs),
+                sum(len(doc.chunks) for doc in embedding_result.docs),
+                len(embedding_result.topic_vector),
+            )
 
         prompt = build_prompt(cleaned_docs)
         LOGGER.info("Prompt built.")
