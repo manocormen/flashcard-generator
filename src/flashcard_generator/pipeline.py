@@ -15,7 +15,7 @@ from flashcard_generator.embed import embed_docs
 from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import generate_cards
-from flashcard_generator.prompt import build_prompt
+from flashcard_generator.prompt import build_prompt, build_topic_prompt
 from flashcard_generator.retrieve import retrieve_docs
 
 if TYPE_CHECKING:
@@ -102,7 +102,9 @@ def run_pipeline(
                 MIN_SIMILARITY,
             )
 
-        prompt = build_prompt(cleaned_docs)
+            prompt = build_topic_prompt(retrieved_docs, topic)
+        else:
+            prompt = build_prompt(cleaned_docs)
         LOGGER.info("Prompt built.")
         LOGGER.debug("Prompt built:\n%s", pformat(prompt, width=120))
         yield PipelineStep.PROMPT_BUILT
