@@ -14,6 +14,7 @@ from flashcard_generator.card import GeneratedCards  # noqa: TC001
 from flashcard_generator.export import ExportedCards  # noqa: TC001
 from flashcard_generator.generate import DEFAULT_MODEL, list_model_names
 from flashcard_generator.pipeline import PipelineStep, run_pipeline
+from flashcard_generator.retrieve import NoMatchesError
 from flashcard_generator.share import CardShare, QRCode, get_lan_ip, make_qr
 
 type ScreenUpdate = dict[gr.Component | gr.Column, Any]
@@ -140,6 +141,10 @@ def run_generation(
 
             rendered_cards = render_cards(event.cards)
             yield show_results_screen(event.cards, rendered_cards, event.export)
+    except NoMatchesError as e:
+        LOGGER.info("%s", e)
+        gr.Warning(str(e))
+        yield show_upload_screen()
     except Exception as e:
         LOGGER.exception("There was an unexpected error while generating cards.")
         gr.Warning(
