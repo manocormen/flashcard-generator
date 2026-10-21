@@ -32,6 +32,9 @@ STEP_LABELS = {
     PipelineStep.FILES_UPLOADED: "Files uploaded",
     PipelineStep.CONTENT_EXTRACTED: "Content extracted",
     PipelineStep.TEXT_CLEANED: "Text cleaned",
+    PipelineStep.TEXT_CHUNKED: "Text chunked",
+    PipelineStep.CHUNKS_EMBEDDED: "Chunks embedded",
+    PipelineStep.RELEVANT_CHUNKS_RETRIEVED: "Relevant chunks retrieved",
     PipelineStep.PROMPT_BUILT: "Prompt built",
     PipelineStep.CARDS_GENERATED: "Cards generated",
     PipelineStep.CARDS_EXPORTED: "Downloads ready",
@@ -46,11 +49,14 @@ CARDS_ENDPOINT = "/gradio_api/api/cards"
 card_share = CardShare()
 
 
-def render_progress(completed_step: PipelineStep) -> str:
+def render_progress(completed_step: PipelineStep, *, has_topic: bool = False) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
 
     for step in PipelineStep:
+        if step.is_topic_only and not has_topic:
+            continue
+
         checkbox = "[x]" if step <= completed_step else "[ ]"
         lines.append(f"- {checkbox} {STEP_LABELS[step]}")
 
@@ -135,7 +141,9 @@ def run_generation(
     try:
         for event in run_pipeline(paths, model, topic):
             if isinstance(event, PipelineStep):
-                yield show_progress_screen(render_progress(event))
+                yield show_progress_screen(
+                    render_progress(event, has_topic=bool(topic)),
+                )
                 time.sleep(STEP_DELAY_SECONDS)
                 continue
 
