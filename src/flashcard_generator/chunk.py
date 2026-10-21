@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from flashcard_generator.extract import Doc
 
 _HEADING_SPLITTER = MarkdownHeaderTextSplitter(
-    headers_to_split_on=[("#" * level, f"#{level}") for level in range(1, 7)],
+    headers_to_split_on=[("#" * level, f"h{level}") for level in range(1, 7)],
     strip_headers=False,
 )
 _TEXT_SPLITTER = RecursiveCharacterTextSplitter(
