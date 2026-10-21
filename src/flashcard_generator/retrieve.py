@@ -9,6 +9,9 @@ from flashcard_generator.chunk import ChunkedDoc
 if TYPE_CHECKING:
     from flashcard_generator.embed import EmbeddedDoc, EmbeddingResult
 
+# Found through informal trial and error using evals' PDFs
+# TODO: Add a dedicated eval and optimize through grid search
+MIN_SIMILARITY = 0.70
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,7 +20,10 @@ class NoMatchesError(ValueError):
     """No passages matched the topic."""
 
 
-def retrieve_docs(result: EmbeddingResult, threshold: float) -> list[ChunkedDoc]:
+def retrieve_docs(
+    result: EmbeddingResult,
+    threshold: float = MIN_SIMILARITY,
+) -> list[ChunkedDoc]:
     """Return documents with relevant chunks only."""
     thresholded = [
         _retrieve_doc(embedded_doc, result.topic_vector, threshold)

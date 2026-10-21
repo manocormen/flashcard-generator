@@ -16,7 +16,7 @@ from flashcard_generator.export import ExportedCards, export_cards
 from flashcard_generator.extract import extract_docs
 from flashcard_generator.generate import generate_cards
 from flashcard_generator.prompt import build_prompt, build_topic_prompt
-from flashcard_generator.retrieve import retrieve_docs
+from flashcard_generator.retrieve import MIN_SIMILARITY, retrieve_docs
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
 
 IMAGES_TMP_DIR_PREFIX = "flashcard-generator-images-"
-MIN_SIMILARITY = 0.65
 
 LOGGER = logging.getLogger(__name__)
 
@@ -94,7 +93,7 @@ def run_pipeline(
                 len(embedding_result.topic_vector),
             )
 
-            retrieved_docs = retrieve_docs(embedding_result, MIN_SIMILARITY)
+            retrieved_docs = retrieve_docs(embedding_result)
             LOGGER.info(
                 "Retrieved %s document(s) (%s chunks) per %s similarity threshold.",
                 len(retrieved_docs),
