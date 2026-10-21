@@ -35,9 +35,21 @@ class PipelineStep(IntEnum):
     FILES_UPLOADED = auto()
     CONTENT_EXTRACTED = auto()
     TEXT_CLEANED = auto()
+    TEXT_CHUNKED = auto()
+    CHUNKS_EMBEDDED = auto()
+    RELEVANT_CHUNKS_RETRIEVED = auto()
     PROMPT_BUILT = auto()
     CARDS_GENERATED = auto()
     CARDS_EXPORTED = auto()
+
+    @property
+    def is_topic_only(self) -> bool:
+        """Return whether we're in a topic-only step."""
+        return self in {
+            PipelineStep.TEXT_CHUNKED,
+            PipelineStep.CHUNKS_EMBEDDED,
+            PipelineStep.RELEVANT_CHUNKS_RETRIEVED,
+        }
 
 
 @dataclass
@@ -85,6 +97,7 @@ def run_pipeline(
                 sum(len(doc.chunks) for doc in chunked_docs),
             )
             LOGGER.debug("Chunked document(s):\n%s", pformat(chunked_docs, width=120))
+            yield PipelineStep.TEXT_CHUNKED
 
             embedding_result = embed_docs(chunked_docs, topic)
             LOGGER.info(
@@ -93,6 +106,7 @@ def run_pipeline(
                 sum(len(doc.chunks) for doc in embedding_result.docs),
                 len(embedding_result.topic_vector),
             )
+            yield PipelineStep.CHUNKS_EMBEDDED
 
             retrieved_docs = retrieve_docs(embedding_result, MIN_SIMILARITY)
             LOGGER.info(
@@ -101,6 +115,7 @@ def run_pipeline(
                 sum(len(doc.chunks) for doc in retrieved_docs),
                 MIN_SIMILARITY,
             )
+            yield PipelineStep.RELEVANT_CHUNKS_RETRIEVED
 
             prompt = build_topic_prompt(retrieved_docs, topic)
         else:
