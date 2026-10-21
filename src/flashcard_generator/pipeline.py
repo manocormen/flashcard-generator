@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from flashcard_generator.card import GeneratedCards
 
 IMAGES_TMP_DIR_PREFIX = "flashcard-generator-images-"
-MIN_SIMILARITY = 0.65
+MIN_SIMILARITY = 0.70
 
 LOGGER = logging.getLogger(__name__)
 
