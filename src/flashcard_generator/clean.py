@@ -28,4 +28,9 @@ def _clean_doc(doc: Doc) -> Doc:
             text,
         )
 
-    return replace(doc, text=ftfy.fix_text(text))
+    return replace(doc, text=clean_text(text))
+
+
+def clean_text(text: str) -> str:
+    """Clean Unicode text glitches."""
+    return ftfy.fix_text(text)
