@@ -4,11 +4,13 @@ Open-source Python app for generating flashcards from learning materials using o
 
 ## Features
 
-- Takes learning materials as input: supports .txt, .PDF, and .md/.markdown.
+- Takes learning materials as input: supports `.txt`, `.pdf`, and `.md`/`.markdown`.
 - Uses a local Ollama model for generation: users may pick their model of choice.
-- Generates basic-style flashcards: Q&A format, atomic, concise, grounded.
+- Supports topic-based generation: selects relevant input passages using [RAG](https://en.wikipedia.org/wiki/Retrieval-augmented_generation).
+- Accounts for images: extracts figures from PDFs and makes cards based on them.
+- Generates basic-style flashcards: Q&A format, atomic, concise, and grounded.
 - Writes the generated cards to disk: exports them as JSON or CSV.
-- Shares the cards with AnkiDroid via the companion Android app (coming soon).
+- Shares the cards with AnkiDroid via the companion [Flashcard Importer](https://github.com/manocormen/flashcard-importer) app.
 
 ## Setup
 
@@ -27,12 +29,12 @@ If you don't install it, replace `just` with `uv run just` in the commands below
 ## Usage
 
 1. Run the app with `just run` and open it in the browser.
-2. Upload learning materials, pick a model, and start generation.
-3. Download the cards or share them with AnkiDroid via the companion app (coming soon).
+2. Upload learning materials, specify a topic (optional), pick a model, and start generation.
+3. Download the cards directly or share them with AnkiDroid via the companion [Flashcard Importer](https://github.com/manocormen/flashcard-importer) app.
 
 ## Demo
 
-https://github.com/user-attachments/assets/7c85cf79-20fd-40d2-a1ba-4d97af894ccb
+https://github.com/user-attachments/assets/8f33ac35-f200-4daf-bee3-26074ee2735f
 
 ## Constraints
 
@@ -54,19 +56,20 @@ just format         # Format the code
 just lint           # Lint the code
 just typecheck      # Typecheck the code
 just test           # Run all tests
+just eval           # Run all evals
 just fix            # Run all mutable QA: auto-fix issues
 just check          # Run all non-mutable QA: signal issues
 ```
 
-## Pipeline
+## Flow
 
-The app is structured as a pipeline with the following components:
+The app is structured as a flow with the following components:
 
-<img width="4414" height="410" alt="flashcard-generator-pipeline" src="https://github.com/user-attachments/assets/144344fc-7987-4588-87e3-f3cbfa633d1d" />
+<img width="4467" height="1830" alt="flashcard-generator-flow" src="https://github.com/user-attachments/assets/71e108bf-76fd-4b42-9589-8cd9ce57e378" />
 
 ## Structure
 
-The project is broken down into the following modules, which roughly correspond to each step in our pipeline.
+The project is broken down into the following modules, which roughly correspond to a component in our flow.
 
 ```bash
 .
@@ -78,12 +81,15 @@ The project is broken down into the following modules, which roughly correspond 
 │   └── flashcard_generator
 │       ├── app.py          # UI and app flow
 │       ├── card.py         # Pydantic card models
+│       ├── chunk.py        # Document chunking
 │       ├── clean.py        # Document cleaning
+│       ├── embed.py        # Document embedding
 │       ├── export.py       # Card exporting
 │       ├── extract.py      # Document extracting
 │       ├── generate.py     # Card generation
 │       ├── pipeline.py     # Pipeline orchestration
 │       ├── prompt.py       # Prompt definitions
+│       ├── retrieve.py     # Passage retrieval
 │       └── share.py        # Card sharing
 ├── tests
 │   └── ...

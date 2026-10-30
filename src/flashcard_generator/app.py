@@ -14,6 +14,7 @@ from flashcard_generator.card import GeneratedCards  # noqa: TC001
 from flashcard_generator.export import ExportedCards  # noqa: TC001
 from flashcard_generator.generate import DEFAULT_MODEL, list_model_names
 from flashcard_generator.pipeline import PipelineStep, run_pipeline
+from flashcard_generator.retrieve import NoMatchesError
 from flashcard_generator.share import CardShare, QRCode, get_lan_ip, make_qr
 
 type ScreenUpdate = dict[gr.Component | gr.Column, Any]
@@ -31,6 +32,9 @@ STEP_LABELS = {
     PipelineStep.FILES_UPLOADED: "Files uploaded",
     PipelineStep.CONTENT_EXTRACTED: "Content extracted",
     PipelineStep.TEXT_CLEANED: "Text cleaned",
+    PipelineStep.TEXT_CHUNKED: "Text chunked",
+    PipelineStep.CHUNKS_EMBEDDED: "Chunks embedded",
+    PipelineStep.RELEVANT_CHUNKS_RETRIEVED: "Relevant chunks retrieved",
     PipelineStep.PROMPT_BUILT: "Prompt built",
     PipelineStep.CARDS_GENERATED: "Cards generated",
     PipelineStep.CARDS_EXPORTED: "Downloads ready",
@@ -45,11 +49,14 @@ CARDS_ENDPOINT = "/gradio_api/api/cards"
 card_share = CardShare()
 
 
-def render_progress(completed_step: PipelineStep) -> str:
+def render_progress(completed_step: PipelineStep, *, has_topic: bool = False) -> str:
     """Render pipeline progress as Markdown."""
     lines = ["### Processing...", ""]
 
     for step in PipelineStep:
+        if step.is_topic_only and not has_topic:
+            continue
+
         checkbox = "[x]" if step <= completed_step else "[ ]"
         lines.append(f"- {checkbox} {STEP_LABELS[step]}")
 
@@ -121,20 +128,31 @@ def update_model_choices() -> gr.Dropdown:
     return gr.Dropdown(choices=choices, value=value)
 
 
-def run_generation(gradio_paths: list[str], model: str) -> Generator[ScreenUpdate]:
+def run_generation(
+    gradio_paths: list[str],
+    model: str,
+    topic: str = "",
+) -> Generator[ScreenUpdate]:
     """Run card generation and translate pipeline events into Gradio updates."""
     # Gradio passes paths to cached upload copies, not raw user-provided paths
     paths = [Path(path) for path in gradio_paths]
+    topic = topic.strip()
 
     try:
-        for event in run_pipeline(paths, model):
+        for event in run_pipeline(paths, model, topic):
             if isinstance(event, PipelineStep):
-                yield show_progress_screen(render_progress(event))
+                yield show_progress_screen(
+                    render_progress(event, has_topic=bool(topic)),
+                )
                 time.sleep(STEP_DELAY_SECONDS)
                 continue
 
             rendered_cards = render_cards(event.cards)
             yield show_results_screen(event.cards, rendered_cards, event.export)
+    except NoMatchesError as e:
+        LOGGER.info("%s", e)
+        gr.Warning(str(e))
+        yield show_upload_screen()
     except Exception as e:
         LOGGER.exception("There was an unexpected error while generating cards.")
         gr.Warning(
@@ -166,6 +184,7 @@ def reset_app_state(export: ExportedCards | None) -> ScreenUpdate:
 
     return show_upload_screen() | {
         files_input: None,
+        topic_input: "",
         share_instructions: "",
         share_qr_image: None,
     }
@@ -233,6 +252,10 @@ with gr.Blocks(title="Flashcard Generator") as demo:
             label="Learning materials: .txt .md .markdown .pdf",
             file_types=[".txt", ".md", ".markdown", ".pdf"],
         )
+        topic_input = gr.Textbox(
+            label="Topic (Optional)",
+            info="Leave blank to generate cards from all uploaded materials.",
+        )
         model_dropdown = gr.Dropdown(
             label="Model",
             choices=[DEFAULT_MODEL],
@@ -297,6 +320,7 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
     RESET_OUTPUTS = [
         files_input,
+        topic_input,
         *GENERATION_OUTPUTS,
         share_instructions,
         share_qr_image,
@@ -318,7 +342,7 @@ with gr.Blocks(title="Flashcard Generator") as demo:
 
     generate_button.click(
         fn=run_generation,
-        inputs=[files_input, model_dropdown],
+        inputs=[files_input, model_dropdown, topic_input],
         outputs=GENERATION_OUTPUTS,
     )
 
